@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "name": "dual-n-back",
+  "buildCommand": null,
+  "outputDirectory": "app",
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "source": "/(.*\\.(html|js|css|wav))",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [{ "key": "Content-Type", "value": "application/manifest+json" }]
+    }
+  ]
+}

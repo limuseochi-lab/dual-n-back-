@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Dual N-Back">
+  <rect width="512" height="512" rx="108" fill="#050508"/>
+  <g transform="translate(56 72)">
+    <rect x="0" y="0" width="120" height="120" rx="18" fill="#1a2238"/>
+    <rect x="140" y="0" width="120" height="120" rx="18" fill="#1a2238"/>
+    <rect x="280" y="0" width="120" height="120" rx="18" fill="#1a2238"/>
+    <rect x="0" y="140" width="120" height="120" rx="18" fill="#1a2238"/>
+    <rect x="140" y="140" width="120" height="120" rx="18" fill="#1a2238"/>
+    <rect x="280" y="140" width="120" height="120" rx="18" fill="#22d3ee"/>
+    <rect x="0" y="280" width="120" height="120" rx="18" fill="#1a2238"/>
+    <rect x="140" y="280" width="120" height="120" rx="18" fill="#1a2238"/>
+    <rect x="280" y="280" width="120" height="120" rx="18" fill="#1a2238"/>
+  </g>
+  <text x="256" y="462" text-anchor="middle" fill="#8b95a8" font-family="system-ui,sans-serif" font-size="42" font-weight="700" letter-spacing="6">N-BACK</text>
+</svg>
