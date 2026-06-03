@@ -3,8 +3,7 @@
         const els = {
           grid: $("grid"),
           btnStart: $("btnStart"),
-          btnLblStart: $("btnLblStart"),
-          btnLblStop: $("btnLblStop"),
+          buildTag: $("buildTag"),
           btnReset: $("btnReset"),
           btnHelp: $("btnHelp"),
           btnSettings: $("btnSettings"),
@@ -164,7 +163,8 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const AUDIO_VER = "v13";
+        const BUILD_VER = "v16";
+        const AUDIO_VER = BUILD_VER;
         const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
         const letterBuffers = Object.create(null);
@@ -176,11 +176,27 @@
         let letterBusy = false;
         let letterPlayChain = Promise.resolve();
         let sharedLetterAudio = null;
+        let mobileLetterAudio = null;
         let roundLock = false;
+
+        function getMobileLetterAudio() {
+          if (!mobileLetterAudio) {
+            mobileLetterAudio = new Audio();
+            mobileLetterAudio.preload = "auto";
+            mobileLetterAudio.playsInline = true;
+            mobileLetterAudio.setAttribute("playsinline", "");
+          }
+          return mobileLetterAudio;
+        }
 
         function stopLetterAudio() {
           letterPlaySeq++;
           letterBusy = false;
+          if (mobileLetterAudio) {
+            try {
+              mobileLetterAudio.pause();
+            } catch (_) {}
+          }
           for (const osc of activeOscillators) {
             try {
               osc.stop();
@@ -217,20 +233,99 @@
           }
         }
 
+        async function playLetterSpeech(symbol) {
+          if (!("speechSynthesis" in window)) return false;
+          const word = LETTER_NAMES[symbol] || symbol;
+          const seq = letterPlaySeq;
+          letterBusy = true;
+          return new Promise((resolve) => {
+            let settled = false;
+            const finish = (ok) => {
+              if (settled) return;
+              settled = true;
+              if (seq === letterPlaySeq) letterBusy = false;
+              resolve(ok && seq === letterPlaySeq);
+            };
+            const u = new SpeechSynthesisUtterance(word);
+            u.lang = "en-US";
+            u.rate = 0.86;
+            u.pitch = 1;
+            u.volume = Math.min(1, Math.max(0.55, state.vol));
+            const voice = pickEnglishVoice();
+            if (voice) u.voice = voice;
+            u.onend = () => finish(true);
+            u.onerror = () => finish(false);
+            try {
+              window.speechSynthesis.cancel();
+              window.speechSynthesis.speak(u);
+            } catch (_) {
+              finish(false);
+              return;
+            }
+            window.setTimeout(() => finish(false), 1100);
+          });
+        }
+
+        async function playLetterMobileWav(symbol) {
+          const a = getMobileLetterAudio();
+          const url = `./audio/${symbol}.wav?${AUDIO_VER}`;
+          const seq = letterPlaySeq;
+          letterBusy = true;
+          a.volume = Math.min(1, Math.max(0.5, state.vol));
+          try {
+            if (!a.paused) a.pause();
+            if (!a.src || !a.src.includes(`${symbol}.wav`)) a.src = url;
+            a.currentTime = 0;
+            await a.play();
+            if (seq !== letterPlaySeq) return false;
+            await new Promise((resolve) => {
+              let settled = false;
+              const done = () => {
+                if (settled) return;
+                settled = true;
+                a.removeEventListener("ended", done);
+                a.removeEventListener("error", done);
+                if (seq === letterPlaySeq) letterBusy = false;
+                resolve();
+              };
+              a.addEventListener("ended", done);
+              a.addEventListener("error", done);
+              const ms = Math.max(420, Math.ceil((a.duration || 0.55) * 1000) + 80);
+              window.setTimeout(done, ms);
+            });
+            return seq === letterPlaySeq;
+          } catch (_) {
+            if (seq === letterPlaySeq) letterBusy = false;
+            return false;
+          }
+        }
+
+        async function playLetterMobile(symbol) {
+          if (isIOS) return playLetterMobileWav(symbol);
+          const spoke = await playLetterSpeech(symbol);
+          if (spoke) return true;
+          return playLetterMobileWav(symbol);
+        }
+
         async function loadLetterBuffers() {
           if (letterAudioReady) return true;
           await ensureAudioUnlocked();
+          if (USE_ELEMENT_AUDIO) {
+            pickEnglishVoice();
+            letterAudioReady = true;
+            return true;
+          }
           const ctx = getAudioCtx();
           let loaded = 0;
           await Promise.all(
             SYMBOLS.map(async (sym) => {
               const url = `./audio/${sym}.wav?${AUDIO_VER}`;
               try {
-                const res = await fetch(url, { cache: "force-cache" });
+                const res = await fetch(url, { cache: "no-store" });
                 if (!res.ok) return;
                 const blob = await res.blob();
                 letterBlobUrls[sym] = URL.createObjectURL(blob);
-                if (ctx && !USE_ELEMENT_AUDIO) {
+                if (ctx) {
                   const ab = await blob.arrayBuffer();
                   letterBuffers[sym] = await ctx.decodeAudioData(ab.slice(0));
                 }
@@ -296,19 +391,21 @@
         }
 
         async function playLetterClipInner(symbol) {
-          await waitLetterIdle(USE_ELEMENT_AUDIO ? 720 : 520);
+          await waitLetterIdle(USE_ELEMENT_AUDIO ? 800 : 520);
           stopLetterAudio();
           const seq = letterPlaySeq;
           await ensureAudioUnlocked();
           if (!letterAudioReady) await loadLetterBuffers();
           if (seq !== letterPlaySeq) return false;
 
-          if (!USE_ELEMENT_AUDIO) {
-            const bufPlay = playLetterBuffer(symbol, seq);
-            if (bufPlay) {
-              const ok = await bufPlay;
-              return ok && seq === letterPlaySeq;
-            }
+          if (USE_ELEMENT_AUDIO) {
+            return playLetterMobile(symbol);
+          }
+
+          const bufPlay = playLetterBuffer(symbol, seq);
+          if (bufPlay) {
+            const ok = await bufPlay;
+            return ok && seq === letterPlaySeq;
           }
 
           const url = letterBlobUrls[symbol] || `./audio/${symbol}.wav?${AUDIO_VER}`;
@@ -362,13 +459,32 @@
           await unlockAudioHard();
           await ensureAudioUnlocked();
           pickEnglishVoice();
+          if (USE_ELEMENT_AUDIO && window.speechSynthesis) {
+            await new Promise((resolve) => {
+              const u = new SpeechSynthesisUtterance(" ");
+              u.volume = 0.01;
+              u.rate = 1;
+              u.lang = "en-US";
+              const voice = pickEnglishVoice();
+              if (voice) u.voice = voice;
+              u.onend = resolve;
+              u.onerror = resolve;
+              try {
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(u);
+              } catch (_) {
+                resolve();
+              }
+              window.setTimeout(resolve, 400);
+            });
+          }
           const ok = await loadLetterBuffers();
           if (!ok) showToast("Audio files missing — check app/audio on GitHub");
         }
 
         function speakSymbol(symbol) {
           if (!("speechSynthesis" in window)) return;
-          if (options.mobile || isIOS) return;
+          if (USE_ELEMENT_AUDIO) return;
           const u = new SpeechSynthesisUtterance(LETTER_NAMES[symbol] || symbol);
           u.rate = 0.95;
           u.pitch = 1.0;
@@ -437,41 +553,8 @@
           };
         }
 
-        function playFeedback(ok) {
-          if (USE_ELEMENT_AUDIO) return;
-          if (letterBusy) return;
-          const ctx = getAudioCtx();
-          if (!ctx) return;
-          const t0 = ctx.currentTime;
-          const volume = Math.max(0.04, state.vol * 0.35);
-
-          const make = (freq, start, dur, type = "sine") => {
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.type = type;
-            osc.frequency.setValueAtTime(freq, start);
-            g.gain.setValueAtTime(0.0001, start);
-            g.gain.exponentialRampToValueAtTime(volume, start + 0.01);
-            g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-            osc.connect(g);
-            g.connect(ctx.destination);
-            osc.start(start);
-            osc.stop(start + dur + 0.015);
-            activeOscillators.push(osc);
-            osc.onended = () => {
-              activeOscillators = activeOscillators.filter((o) => o !== osc);
-            };
-          };
-
-          if (ok) {
-            // 띵동
-            make(880, t0, 0.09, "sine");
-            make(1174.66, t0 + 0.11, 0.13, "sine");
-          } else {
-            // 에엥
-            make(320, t0, 0.11, "sawtooth");
-            make(240, t0 + 0.09, 0.16, "sawtooth");
-          }
+        function playFeedback(_ok) {
+          /* No correct/wrong beeps — visual flash + toast only */
         }
 
         // --- Game state ---
@@ -586,7 +669,7 @@
           state.pressedA = false;
           state.seqPos = [];
           state.seqAud = [];
-          els.btnStart.disabled = false;
+          setFormDisabled(false);
           updateTouchMainButton();
           els.btnReset.disabled = false;
           els.indRun.classList.remove("live");
@@ -630,31 +713,20 @@
         }
 
         function setFormDisabled(disabled) {
+          if (!els.form) return;
+          const lock = disabled && state.running;
           els.form.querySelectorAll("input, select, .step-btn").forEach((el) => {
-            el.disabled = disabled;
+            el.disabled = lock;
           });
         }
 
         function updateTouchMainButton() {
           if (!options.touchControls || !els.btnStart) return;
-          const legacy = document.getElementById("btnTouchPause");
-          if (legacy) legacy.remove();
-          els.btnStart.hidden = false;
+          document.getElementById("btnTouchPause")?.remove();
           const showStop = state.running && !state.paused;
-          if (els.btnLblStart) {
-            els.btnLblStart.hidden = showStop;
-            els.btnLblStart.setAttribute("aria-hidden", showStop ? "true" : "false");
-          }
-          if (els.btnLblStop) {
-            els.btnLblStop.hidden = !showStop;
-            els.btnLblStop.setAttribute("aria-hidden", showStop ? "false" : "true");
-          }
-          if (els.btnStart) {
-            els.btnStart.setAttribute(
-              "aria-label",
-              showStop ? "Pause game" : state.running ? "Resume game" : "Start game"
-            );
-          }
+          const text = showStop ? "STOP" : "START";
+          els.btnStart.textContent = text;
+          els.btnStart.setAttribute("aria-label", text);
         }
 
         function setRunningUI(running) {
@@ -663,13 +735,12 @@
           if (running) {
             els.indRun.classList.add("live");
             if (!options.touchControls) els.btnStart.textContent = "Pause";
-            els.btnReset.disabled = true;
           } else {
             els.indRun.classList.remove("live");
             state.paused = false;
             if (!options.touchControls) els.btnStart.textContent = "START";
-            els.btnReset.disabled = false;
           }
+          els.btnReset.disabled = false;
           updateTouchMainButton();
         }
 
@@ -929,8 +1000,6 @@
           logLine(`<div class="muted">Round ${state.round} · N=${state.n} · ${state.trials} trials</div>`);
 
           state.trialIdx = 0;
-          setRunningUI(true);
-          setPausedUI(false);
           renderHeader();
 
           await unlockAudioHard();
@@ -955,8 +1024,11 @@
           showToast("Starting…");
           await sleep(250);
 
+          setRunningUI(true);
+          setPausedUI(false);
+
           while (state.trialIdx < state.trials) {
-            if (token !== runToken) return;
+            if (token !== runToken) break;
 
             if (state.paused) {
               await sleep(80);
@@ -970,7 +1042,7 @@
             // keep stimulus visible for stimMs
             const tStart = nowMs();
             while (nowMs() - tStart < state.stimMs) {
-              if (token !== runToken) return;
+              if (token !== runToken) break;
               if (state.paused) break;
               await sleep(16);
             }
@@ -981,7 +1053,7 @@
             const remaining = Math.max(0, state.isiMs - state.stimMs);
             const tIsi = nowMs();
             while (nowMs() - tIsi < remaining) {
-              if (token !== runToken) return;
+              if (token !== runToken) break;
               if (state.paused) break;
               await sleep(16);
             }
@@ -1005,16 +1077,22 @@
             }
           }
 
-          if (token !== runToken) return;
-          stopLetterAudio();
-          setRunningUI(false);
-          setPausedUI(false);
-          renderHeader();
-          renderRoundSummary();
-          showToast("Round complete");
-          els.btnReset.disabled = false;
+          if (token === runToken) {
+            stopLetterAudio();
+            setRunningUI(false);
+            setPausedUI(false);
+            renderHeader();
+            renderRoundSummary();
+            showToast("Round complete");
+            els.btnReset.disabled = false;
+          }
           } finally {
             roundLock = false;
+            if (state.running) {
+              setRunningUI(false);
+              setPausedUI(false);
+            }
+            setFormDisabled(false);
           }
         }
 
@@ -1050,6 +1128,12 @@
 
         // UI events
         els.btnStart.addEventListener("click", toggleStartPause);
+        els.btnStart.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggleStartPause();
+          }
+        });
         els.btnReset.addEventListener("click", hardReset);
         els.btnHelp.addEventListener("click", () => {
           try {
@@ -1062,8 +1146,9 @@
 
         if (els.btnSettings && els.dlgSettings) {
           els.btnSettings.addEventListener("click", () => {
+            setFormDisabled(false);
             if (state.running) {
-              showToast("Cannot change settings during a game");
+              showToast("Stop the game first to change settings");
             }
             try {
               els.dlgSettings.showModal();
@@ -1083,7 +1168,10 @@
           const btn = e.target.closest(".step-btn");
           if (!btn) return;
           e.preventDefault();
-          if (state.running) return;
+          if (state.running) {
+            showToast("Stop the game first to change settings");
+            return;
+          }
           const input = $(btn.dataset.step);
           if (!input) return;
           const delta = parseInt(btn.dataset.delta, 10) || 0;
@@ -1169,15 +1257,7 @@
         resetRuntime();
         renderHeader();
         updateTouchMainButton();
+        setFormDisabled(false);
 
-        if (options.registerSw && "serviceWorker" in navigator) {
-          navigator.serviceWorker.register(`${options.swPath || "./sw.js"}?v=13`).catch(() => {});
-        }
-        if ("caches" in window) {
-          caches.keys().then((keys) => {
-            for (const k of keys) {
-              if (!k.includes("v13")) caches.delete(k);
-            }
-          });
-        }
+        if (els.buildTag) els.buildTag.textContent = BUILD_VER;
 };

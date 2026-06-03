@@ -653,31 +653,48 @@ body.layout-app #btnTouchPosition {
 
 body.layout-app .touch-main {
   justify-self: center;
-  position: relative;
   width: 100%;
-  font-size: clamp(16px, 4.2vw, 20px);
-  letter-spacing: 0.18em;
-  color: rgba(255, 255, 255, 0.92);
-  padding-inline: 4px;
+  padding: 16px 4px;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-size: clamp(16px, 4.2vw, 20px);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.92);
   background: transparent;
   box-shadow: none;
   border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.layout-app .touch-main::before,
+body.layout-app .touch-main::after {
+  content: none !important;
+  display: none !important;
 }
 
 body.layout-app .touch-main:active {
   color: #22d3ee;
+  transform: scale(0.98);
 }
 
-body.layout-app .touch-lbl {
-  display: block;
-  white-space: nowrap;
-  line-height: 1.2;
+body.layout-app .build-tag {
+  position: fixed;
+  top: calc(6px + env(safe-area-inset-top));
+  right: 10px;
+  z-index: 120;
+  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #22d3ee;
+  letter-spacing: 0.06em;
   pointer-events: none;
-}
-
-body.layout-app .touch-lbl[hidden] {
-  display: none !important;
 }
 
 body.layout-app .touch-stats {
