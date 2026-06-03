@@ -12,7 +12,7 @@
     <link rel="apple-touch-icon" href="./icons/icon-180.png" />
     <link rel="icon" href="./icons/icon-180.png" type="image/png" />
     <title>Dual N-Back</title>
-    <link rel="stylesheet" href="./game.css?v=10" />
+    <link rel="stylesheet" href="./game.css?v=12" />
   </head>
   <body class="layout-app">
     <div class="wrap">
@@ -63,8 +63,9 @@
     <div class="touch-bar app-only" aria-label="Touch controls">
       <button type="button" class="touch-zone" id="btnTouchSound" aria-label="Sound match">SOUND</button>
       <div class="touch-center">
-        <button type="button" class="touch-zone touch-start primary" id="btnStart" aria-label="Start game">START</button>
-        <button type="button" class="touch-zone touch-pause" id="btnTouchPause" aria-label="Pause or resume" hidden>STOP</button>
+        <button type="button" class="touch-zone touch-main primary" id="btnStart" aria-label="Start game">
+          <span class="touch-main-label" id="btnStartLabel">START</span>
+        </button>
       </div>
       <button type="button" class="touch-zone" id="btnTouchPosition" aria-label="Position match">POSITION</button>
     </div>
@@ -176,7 +177,7 @@
         <ul style="margin: 10px 0 0; padding-left: 18px">
           <li><strong>POSITION</strong>: tap when the current position matches <strong>N trials ago</strong></li>
           <li><strong>SOUND</strong>: tap when the current sound matches <strong>N trials ago</strong></li>
-          <li><strong>STOP</strong>: pause / resume (center button; tap again to continue)</li>
+          <li><strong>START / STOP</strong>: center button toggles start, pause, and resume</li>
           <li><strong>INFO</strong>: show or hide round, N, trial, and score</li>
           <li>The first <strong>N</strong> trials have no matches.</li>
         </ul>
@@ -189,7 +190,7 @@
       </div>
     </dialog>
 
-    <script src="./game.js?v=10"></script>
+    <script src="./game.js?v=12"></script>
     <script>
       initDualNBack({ registerSw: true, swPath: "./sw.js", touchControls: true, mobile: true });
     </script>

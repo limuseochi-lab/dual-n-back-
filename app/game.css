@@ -611,10 +611,9 @@ body.layout-app .touch-bar {
 }
 
 body.layout-app .touch-center {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
+  display: grid;
+  place-items: center;
+  min-width: 7.5rem;
   pointer-events: none;
 }
 
@@ -649,16 +648,21 @@ body.layout-app #btnTouchPosition {
   text-align: right;
 }
 
-body.layout-app .touch-pause {
+body.layout-app .touch-main {
   justify-self: center;
   font-size: clamp(16px, 4.2vw, 20px);
   letter-spacing: 0.18em;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.92);
   padding-inline: 20px;
+  min-width: 6.5rem;
+  text-align: center;
 }
 
-body.layout-app .touch-pause[hidden] {
-  display: none;
+body.layout-app .touch-main-label {
+  display: block;
+  white-space: nowrap;
+  line-height: 1.2;
+  pointer-events: none;
 }
 
 body.layout-app .touch-stats {
@@ -670,17 +674,6 @@ body.layout-app .touch-stats {
 
 body.layout-app .touch-stats[aria-pressed="true"] {
   color: #22d3ee;
-}
-
-body.layout-app .touch-start {
-  font-size: clamp(14px, 3.8vw, 18px);
-  letter-spacing: 0.14em;
-  color: rgba(255, 255, 255, 0.92);
-  padding-inline: 16px;
-}
-
-body.layout-app .touch-start[hidden] {
-  display: none;
 }
 
 body.layout-app .topbar .btns #btnStats[aria-pressed="true"] {
