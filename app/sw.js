@@ -1,4 +1,4 @@
-const CACHE = "dual-n-back-app-v8";
+const CACHE = "dual-n-back-app-v10";
 
 self.addEventListener("install", () => {
   self.skipWaiting();

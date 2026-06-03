@@ -163,35 +163,63 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const AUDIO_VER = "v8";
+        const AUDIO_VER = "v10";
         const letterBlobUrls = Object.create(null);
         const letterBuffers = Object.create(null);
         let letterAudioReady = false;
+        let activeClip = null;
+        let activeBufferSource = null;
+        let activeOscillators = [];
+
+        function stopLetterAudio() {
+          for (const osc of activeOscillators) {
+            try {
+              osc.stop();
+            } catch (_) {}
+          }
+          activeOscillators = [];
+          if (activeClip) {
+            try {
+              activeClip.pause();
+              activeClip.currentTime = 0;
+            } catch (_) {}
+            activeClip = null;
+          }
+          if (activeBufferSource) {
+            try {
+              activeBufferSource.stop();
+            } catch (_) {}
+            activeBufferSource = null;
+          }
+          if (window.speechSynthesis) {
+            try {
+              window.speechSynthesis.cancel();
+            } catch (_) {}
+          }
+        }
 
         async function loadLetterBuffers() {
           if (letterAudioReady) return true;
           await ensureAudioUnlocked();
+          const ctx = getAudioCtx();
           let loaded = 0;
           await Promise.all(
             SYMBOLS.map(async (sym) => {
               const url = `./audio/${sym}.wav?${AUDIO_VER}`;
               try {
-                const res = await fetch(url, { cache: "no-store" });
+                const res = await fetch(url, { cache: "force-cache" });
                 if (!res.ok) return;
                 const blob = await res.blob();
                 letterBlobUrls[sym] = URL.createObjectURL(blob);
-                loaded++;
-                if (!options.mobile && !isIOS) {
-                  const ctx = getAudioCtx();
-                  if (ctx) {
-                    const ab = await blob.arrayBuffer();
-                    letterBuffers[sym] = await ctx.decodeAudioData(ab);
-                  }
+                if (ctx) {
+                  const ab = await blob.arrayBuffer();
+                  letterBuffers[sym] = await ctx.decodeAudioData(ab.slice(0));
                 }
+                loaded++;
               } catch (_) {}
             })
           );
-          letterAudioReady = loaded > 0;
+          letterAudioReady = loaded >= 20;
           return letterAudioReady;
         }
 
@@ -207,6 +235,10 @@
             src.connect(g);
             g.connect(ctx.destination);
             src.start(0);
+            activeBufferSource = src;
+            src.onended = () => {
+              if (activeBufferSource === src) activeBufferSource = null;
+            };
             return true;
           } catch (_) {
             return false;
@@ -215,20 +247,22 @@
 
         async function playLetterClip(symbol) {
           await ensureAudioUnlocked();
-          const src =
-            letterBlobUrls[symbol] || `./audio/${symbol}.wav?${AUDIO_VER}`;
-          const audio = new Audio(src);
+          if (!letterAudioReady) await loadLetterBuffers();
+          stopLetterAudio();
+
+          if (playLetterBuffer(symbol)) return true;
+
+          const url = letterBlobUrls[symbol] || `./audio/${symbol}.wav?${AUDIO_VER}`;
+          const audio = new Audio(url);
           audio.playsInline = true;
+          audio.preload = "auto";
           audio.volume = Math.max(0.35, state.vol);
+          activeClip = audio;
           try {
             await audio.play();
             return true;
-          } catch (_) {}
-          if (playLetterBuffer(symbol)) return true;
-          const idx = SYMBOLS.indexOf(symbol);
-          if (idx >= 0) {
-            playTone(idx, Math.max(0.35, state.vol), Math.min(420, state.stimMs));
-            return true;
+          } catch (_) {
+            activeClip = null;
           }
           return false;
         }
@@ -243,8 +277,7 @@
           await ensureAudioUnlocked();
           pickEnglishVoice();
           const ok = await loadLetterBuffers();
-          if (!ok) showToast("Audio files missing — upload app/audio folder");
-          await playLetterClip("A");
+          if (!ok) showToast("Audio files missing — check app/audio on GitHub");
         }
 
         function speakSymbol(symbol) {
@@ -284,15 +317,15 @@
           }
 
           if (state.audioMode === "speech") {
+            stopLetterAudio();
             speakSymbol(symbol);
             return;
           }
           if (state.audioMode === "tone+speech") {
-            playTone(aud, vol * 0.55, dur);
-            window.setTimeout(() => speakSymbol(symbol), 60);
+            stopLetterAudio();
+            await playLetterClip(symbol);
             return;
           }
-          playTone(aud, vol, dur);
         }
 
         function playTone(idx, vol, durationMs) {
@@ -310,7 +343,12 @@
           osc.connect(g);
           g.connect(ctx.destination);
           osc.start(t0);
-          osc.stop(t0 + durationMs / 1000 + 0.03);
+          const stopAt = t0 + durationMs / 1000 + 0.03;
+          osc.stop(stopAt);
+          activeOscillators.push(osc);
+          osc.onended = () => {
+            activeOscillators = activeOscillators.filter((o) => o !== osc);
+          };
         }
 
         function playFeedback(ok) {
@@ -331,6 +369,10 @@
             g.connect(ctx.destination);
             osc.start(start);
             osc.stop(start + dur + 0.015);
+            activeOscillators.push(osc);
+            osc.onended = () => {
+              activeOscillators = activeOscillators.filter((o) => o !== osc);
+            };
           };
 
           if (ok) {
