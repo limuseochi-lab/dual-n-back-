@@ -655,9 +655,7 @@ body.layout-app .touch-main {
   justify-self: center;
   position: relative;
   width: 100%;
-  font-size: clamp(16px, 4.2vw, 20px);
-  letter-spacing: 0.18em;
-  color: rgba(255, 255, 255, 0.92);
+  font-size: 0;
   padding-inline: 4px;
   text-align: center;
   background: transparent;
@@ -665,18 +663,24 @@ body.layout-app .touch-main {
   border: none;
 }
 
-body.layout-app .touch-main::before {
-  content: "START";
+body.layout-app .touch-main::before,
+body.layout-app .touch-main::after {
+  content: none !important;
+  display: none !important;
+}
+
+body.layout-app .btn-main-text {
   display: block;
+  font-size: clamp(16px, 4.2vw, 20px);
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.92);
   white-space: nowrap;
   line-height: 1.2;
+  pointer-events: none;
 }
 
-body.layout-app .touch-main[data-mode="stop"]::before {
-  content: "STOP";
-}
-
-body.layout-app .touch-main:active {
+body.layout-app .touch-main:active .btn-main-text {
   color: #22d3ee;
 }
 

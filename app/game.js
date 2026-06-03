@@ -3,6 +3,7 @@
         const els = {
           grid: $("grid"),
           btnStart: $("btnStart"),
+          btnMainText: $("btnMainText"),
           buildTag: $("buildTag"),
           btnReset: $("btnReset"),
           btnHelp: $("btnHelp"),
@@ -163,7 +164,7 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const BUILD_VER = "v14";
+        const BUILD_VER = "v15";
         const AUDIO_VER = BUILD_VER;
         const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
@@ -503,41 +504,8 @@
           };
         }
 
-        function playFeedback(ok) {
-          if (USE_ELEMENT_AUDIO) return;
-          if (letterBusy) return;
-          const ctx = getAudioCtx();
-          if (!ctx) return;
-          const t0 = ctx.currentTime;
-          const volume = Math.max(0.04, state.vol * 0.35);
-
-          const make = (freq, start, dur, type = "sine") => {
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.type = type;
-            osc.frequency.setValueAtTime(freq, start);
-            g.gain.setValueAtTime(0.0001, start);
-            g.gain.exponentialRampToValueAtTime(volume, start + 0.01);
-            g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-            osc.connect(g);
-            g.connect(ctx.destination);
-            osc.start(start);
-            osc.stop(start + dur + 0.015);
-            activeOscillators.push(osc);
-            osc.onended = () => {
-              activeOscillators = activeOscillators.filter((o) => o !== osc);
-            };
-          };
-
-          if (ok) {
-            // 띵동
-            make(880, t0, 0.09, "sine");
-            make(1174.66, t0 + 0.11, 0.13, "sine");
-          } else {
-            // 에엥
-            make(320, t0, 0.11, "sawtooth");
-            make(240, t0 + 0.09, 0.16, "sawtooth");
-          }
+        function playFeedback(_ok) {
+          /* No correct/wrong beeps — visual flash + toast only */
         }
 
         // --- Game state ---
@@ -653,6 +621,7 @@
           state.seqPos = [];
           state.seqAud = [];
           els.btnStart.disabled = false;
+          setFormDisabled(false);
           updateTouchMainButton();
           els.btnReset.disabled = false;
           els.indRun.classList.remove("live");
@@ -696,8 +665,10 @@
         }
 
         function setFormDisabled(disabled) {
+          if (!els.form) return;
+          const lock = disabled && state.running;
           els.form.querySelectorAll("input, select, .step-btn").forEach((el) => {
-            el.disabled = disabled;
+            el.disabled = lock;
           });
         }
 
@@ -706,11 +677,10 @@
           document.getElementById("btnTouchPause")?.remove();
           els.btnStart.hidden = false;
           const showStop = state.running && !state.paused;
-          els.btnStart.dataset.mode = showStop ? "stop" : "start";
-          els.btnStart.setAttribute(
-            "aria-label",
-            showStop ? "Pause game" : state.running ? "Resume game" : "Start game"
-          );
+          const text = showStop ? "STOP" : "START";
+          if (els.btnMainText) els.btnMainText.textContent = text;
+          els.btnStart.setAttribute("aria-label", text);
+          els.btnStart.removeAttribute("data-mode");
         }
 
         function setRunningUI(running) {
@@ -985,8 +955,6 @@
           logLine(`<div class="muted">Round ${state.round} · N=${state.n} · ${state.trials} trials</div>`);
 
           state.trialIdx = 0;
-          setRunningUI(true);
-          setPausedUI(false);
           renderHeader();
 
           await unlockAudioHard();
@@ -1011,8 +979,11 @@
           showToast("Starting…");
           await sleep(250);
 
+          setRunningUI(true);
+          setPausedUI(false);
+
           while (state.trialIdx < state.trials) {
-            if (token !== runToken) return;
+            if (token !== runToken) break;
 
             if (state.paused) {
               await sleep(80);
@@ -1026,7 +997,7 @@
             // keep stimulus visible for stimMs
             const tStart = nowMs();
             while (nowMs() - tStart < state.stimMs) {
-              if (token !== runToken) return;
+              if (token !== runToken) break;
               if (state.paused) break;
               await sleep(16);
             }
@@ -1037,7 +1008,7 @@
             const remaining = Math.max(0, state.isiMs - state.stimMs);
             const tIsi = nowMs();
             while (nowMs() - tIsi < remaining) {
-              if (token !== runToken) return;
+              if (token !== runToken) break;
               if (state.paused) break;
               await sleep(16);
             }
@@ -1061,16 +1032,22 @@
             }
           }
 
-          if (token !== runToken) return;
-          stopLetterAudio();
-          setRunningUI(false);
-          setPausedUI(false);
-          renderHeader();
-          renderRoundSummary();
-          showToast("Round complete");
-          els.btnReset.disabled = false;
+          if (token === runToken) {
+            stopLetterAudio();
+            setRunningUI(false);
+            setPausedUI(false);
+            renderHeader();
+            renderRoundSummary();
+            showToast("Round complete");
+            els.btnReset.disabled = false;
+          }
           } finally {
             roundLock = false;
+            if (state.running) {
+              setRunningUI(false);
+              setPausedUI(false);
+            }
+            setFormDisabled(false);
           }
         }
 
@@ -1118,8 +1095,9 @@
 
         if (els.btnSettings && els.dlgSettings) {
           els.btnSettings.addEventListener("click", () => {
+            setFormDisabled(false);
             if (state.running) {
-              showToast("Cannot change settings during a game");
+              showToast("Stop the game first to change settings");
             }
             try {
               els.dlgSettings.showModal();
@@ -1139,7 +1117,10 @@
           const btn = e.target.closest(".step-btn");
           if (!btn) return;
           e.preventDefault();
-          if (state.running) return;
+          if (state.running) {
+            showToast("Stop the game first to change settings");
+            return;
+          }
           const input = $(btn.dataset.step);
           if (!input) return;
           const delta = parseInt(btn.dataset.delta, 10) || 0;
@@ -1225,6 +1206,7 @@
         resetRuntime();
         renderHeader();
         updateTouchMainButton();
+        setFormDisabled(false);
 
         if (els.buildTag) els.buildTag.textContent = BUILD_VER;
 };

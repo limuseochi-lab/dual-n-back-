@@ -13,10 +13,10 @@
     <link rel="apple-touch-icon" href="./icons/icon-180.png" />
     <link rel="icon" href="./icons/icon-180.png" type="image/png" />
     <title>Dual N-Back</title>
-    <link rel="stylesheet" href="./game.css?v=14" />
+    <link rel="stylesheet" href="./game.css?v=15" />
   </head>
   <body class="layout-app">
-    <div id="buildTag" class="build-tag" aria-hidden="true">v14</div>
+    <div id="buildTag" class="build-tag" aria-hidden="true">v15</div>
     <div class="wrap">
       <div class="app" role="application" aria-label="Dual N-Back game">
         <section class="panel" aria-label="Game board">
@@ -65,7 +65,9 @@
     <div class="touch-bar app-only" aria-label="Touch controls">
       <button type="button" class="touch-zone" id="btnTouchSound" aria-label="Sound match">SOUND</button>
       <div class="touch-center">
-        <button type="button" class="touch-zone touch-main" id="btnStart" data-mode="start" aria-label="Start game"></button>
+        <button type="button" class="touch-zone touch-main" id="btnStart" aria-label="START">
+          <span class="btn-main-text" id="btnMainText">START</span>
+        </button>
       </div>
       <button type="button" class="touch-zone" id="btnTouchPosition" aria-label="Position match">POSITION</button>
     </div>
@@ -190,7 +192,7 @@
       </div>
     </dialog>
 
-    <script src="./game.js?v=14"></script>
+    <script src="./game.js?v=15"></script>
     <script>
       (function () {
         var legacy = document.getElementById("btnTouchPause");
