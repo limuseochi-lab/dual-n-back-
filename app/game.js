@@ -3,7 +3,7 @@
         const els = {
           grid: $("grid"),
           btnStart: $("btnStart"),
-          btnMainText: $("btnMainText"),
+          btnStartText: $("btnStartText"),
           buildTag: $("buildTag"),
           btnReset: $("btnReset"),
           btnHelp: $("btnHelp"),
@@ -115,11 +115,6 @@
           const ctx = getAudioCtx();
           if (!ctx) return;
           try {
-            const buffer = ctx.createBuffer(1, 1, 22050);
-            const source = ctx.createBufferSource();
-            source.buffer = buffer;
-            source.connect(ctx.destination);
-            source.start(0);
             if (ctx.state === "suspended") await ctx.resume();
             audioUnlocked = true;
           } catch (_) {}
@@ -164,14 +159,12 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const BUILD_VER = "v15";
+        const BUILD_VER = "v17";
         const AUDIO_VER = BUILD_VER;
         const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
         const letterBuffers = Object.create(null);
-        const letterPool = Object.create(null);
         let letterAudioReady = false;
-        let letterPoolReady = false;
         let activeClip = null;
         let activeBufferSource = null;
         let activeOscillators = [];
@@ -179,35 +172,27 @@
         let letterBusy = false;
         let letterPlayChain = Promise.resolve();
         let sharedLetterAudio = null;
+        let mobileLetterAudio = null;
         let roundLock = false;
 
-        function stopLetterPool() {
-          for (const sym of SYMBOLS) {
-            const a = letterPool[sym];
-            if (!a) continue;
-            try {
-              a.pause();
-              a.currentTime = 0;
-            } catch (_) {}
+        function getMobileLetterAudio() {
+          if (!mobileLetterAudio) {
+            mobileLetterAudio = new Audio();
+            mobileLetterAudio.preload = "auto";
+            mobileLetterAudio.playsInline = true;
+            mobileLetterAudio.setAttribute("playsinline", "");
           }
-        }
-
-        function initLetterPool() {
-          if (letterPoolReady) return;
-          for (const sym of SYMBOLS) {
-            const a = new Audio(`./audio/${sym}.wav?${AUDIO_VER}`);
-            a.preload = "auto";
-            a.playsInline = true;
-            a.setAttribute("playsinline", "");
-            letterPool[sym] = a;
-          }
-          letterPoolReady = true;
+          return mobileLetterAudio;
         }
 
         function stopLetterAudio() {
           letterPlaySeq++;
           letterBusy = false;
-          stopLetterPool();
+          if (mobileLetterAudio) {
+            try {
+              mobileLetterAudio.pause();
+            } catch (_) {}
+          }
           for (const osc of activeOscillators) {
             try {
               osc.stop();
@@ -244,15 +229,48 @@
           }
         }
 
-        async function playLetterPool(symbol) {
-          initLetterPool();
-          stopLetterPool();
-          const a = letterPool[symbol];
-          if (!a) return false;
+        async function playLetterSpeech(symbol) {
+          if (!("speechSynthesis" in window)) return false;
+          const word = LETTER_NAMES[symbol] || symbol;
           const seq = letterPlaySeq;
           letterBusy = true;
-          a.volume = Math.max(0.35, state.vol);
+          return new Promise((resolve) => {
+            let settled = false;
+            const finish = (ok) => {
+              if (settled) return;
+              settled = true;
+              if (seq === letterPlaySeq) letterBusy = false;
+              resolve(ok && seq === letterPlaySeq);
+            };
+            const u = new SpeechSynthesisUtterance(word);
+            u.lang = "en-US";
+            u.rate = 0.86;
+            u.pitch = 1;
+            u.volume = Math.min(1, Math.max(0.55, state.vol));
+            const voice = pickEnglishVoice();
+            if (voice) u.voice = voice;
+            u.onend = () => finish(true);
+            u.onerror = () => finish(false);
+            try {
+              window.speechSynthesis.cancel();
+              window.speechSynthesis.speak(u);
+            } catch (_) {
+              finish(false);
+              return;
+            }
+            window.setTimeout(() => finish(false), 1100);
+          });
+        }
+
+        async function playLetterMobileWav(symbol) {
+          const a = getMobileLetterAudio();
+          const url = `./audio/${symbol}.wav?${AUDIO_VER}`;
+          const seq = letterPlaySeq;
+          letterBusy = true;
+          a.volume = Math.min(1, Math.max(0.5, state.vol));
           try {
+            if (!a.paused) a.pause();
+            if (!a.src || !a.src.includes(`${symbol}.wav`)) a.src = url;
             a.currentTime = 0;
             await a.play();
             if (seq !== letterPlaySeq) return false;
@@ -268,7 +286,8 @@
               };
               a.addEventListener("ended", done);
               a.addEventListener("error", done);
-              window.setTimeout(done, 680);
+              const ms = Math.max(420, Math.ceil((a.duration || 0.55) * 1000) + 80);
+              window.setTimeout(done, ms);
             });
             return seq === letterPlaySeq;
           } catch (_) {
@@ -277,14 +296,17 @@
           }
         }
 
+        async function playLetterMobile(symbol, seq) {
+          const bufPlay = playLetterBuffer(symbol, seq);
+          if (!bufPlay) return false;
+          const ok = await bufPlay;
+          if (ok) await sleep(60);
+          return ok;
+        }
+
         async function loadLetterBuffers() {
           if (letterAudioReady) return true;
           await ensureAudioUnlocked();
-          if (USE_ELEMENT_AUDIO) {
-            initLetterPool();
-            letterAudioReady = true;
-            return true;
-          }
           const ctx = getAudioCtx();
           let loaded = 0;
           await Promise.all(
@@ -294,7 +316,7 @@
                 const res = await fetch(url, { cache: "no-store" });
                 if (!res.ok) return;
                 const blob = await res.blob();
-                letterBlobUrls[sym] = URL.createObjectURL(blob);
+                if (!USE_ELEMENT_AUDIO) letterBlobUrls[sym] = URL.createObjectURL(blob);
                 if (ctx) {
                   const ab = await blob.arrayBuffer();
                   letterBuffers[sym] = await ctx.decodeAudioData(ab.slice(0));
@@ -312,10 +334,16 @@
           const buf = letterBuffers[symbol];
           if (!ctx || !buf) return null;
           try {
+            const t0 = ctx.currentTime;
+            const peak = Math.min(1, Math.max(0.45, state.vol));
+            const dur = buf.duration;
             const src = ctx.createBufferSource();
             const g = ctx.createGain();
             src.buffer = buf;
-            g.gain.value = Math.max(0.35, state.vol);
+            g.gain.setValueAtTime(0.001, t0);
+            g.gain.linearRampToValueAtTime(peak, t0 + 0.02);
+            g.gain.setValueAtTime(peak, Math.max(t0 + 0.03, t0 + dur - 0.05));
+            g.gain.linearRampToValueAtTime(0.001, t0 + dur);
             src.connect(g);
             g.connect(ctx.destination);
             activeBufferSource = src;
@@ -330,8 +358,9 @@
                 resolve(seq === letterPlaySeq);
               };
               src.onended = done;
-              src.start(0);
-              window.setTimeout(done, Math.ceil(buf.duration * 1000) + 90);
+              src.start(t0);
+              src.stop(t0 + dur + 0.02);
+              window.setTimeout(done, Math.ceil(dur * 1000) + 120);
             });
           } catch (_) {
             letterBusy = false;
@@ -369,7 +398,7 @@
           if (seq !== letterPlaySeq) return false;
 
           if (USE_ELEMENT_AUDIO) {
-            return playLetterPool(symbol);
+            return playLetterMobile(symbol, seq);
           }
 
           const bufPlay = playLetterBuffer(symbol, seq);
@@ -428,14 +457,14 @@
         async function primeSpeechAudible() {
           await unlockAudioHard();
           await ensureAudioUnlocked();
-          pickEnglishVoice();
+          if (!USE_ELEMENT_AUDIO) pickEnglishVoice();
           const ok = await loadLetterBuffers();
-          if (!ok) showToast("Audio files missing — check app/audio on GitHub");
+          if (!ok) showToast("Audio files missing — upload app/audio to GitHub");
         }
 
         function speakSymbol(symbol) {
           if (!("speechSynthesis" in window)) return;
-          if (options.mobile || isIOS) return;
+          if (USE_ELEMENT_AUDIO) return;
           const u = new SpeechSynthesisUtterance(LETTER_NAMES[symbol] || symbol);
           u.rate = 0.95;
           u.pitch = 1.0;
@@ -620,7 +649,6 @@
           state.pressedA = false;
           state.seqPos = [];
           state.seqAud = [];
-          els.btnStart.disabled = false;
           setFormDisabled(false);
           updateTouchMainButton();
           els.btnReset.disabled = false;
@@ -675,12 +703,10 @@
         function updateTouchMainButton() {
           if (!options.touchControls || !els.btnStart) return;
           document.getElementById("btnTouchPause")?.remove();
-          els.btnStart.hidden = false;
           const showStop = state.running && !state.paused;
           const text = showStop ? "STOP" : "START";
-          if (els.btnMainText) els.btnMainText.textContent = text;
+          if (els.btnStartText) els.btnStartText.textContent = text;
           els.btnStart.setAttribute("aria-label", text);
-          els.btnStart.removeAttribute("data-mode");
         }
 
         function setRunningUI(running) {
@@ -689,13 +715,12 @@
           if (running) {
             els.indRun.classList.add("live");
             if (!options.touchControls) els.btnStart.textContent = "Pause";
-            els.btnReset.disabled = true;
           } else {
             els.indRun.classList.remove("live");
             state.paused = false;
             if (!options.touchControls) els.btnStart.textContent = "START";
-            els.btnReset.disabled = false;
           }
+          els.btnReset.disabled = false;
           updateTouchMainButton();
         }
 
@@ -1083,6 +1108,12 @@
 
         // UI events
         els.btnStart.addEventListener("click", toggleStartPause);
+        els.btnStart.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggleStartPause();
+          }
+        });
         els.btnReset.addEventListener("click", hardReset);
         els.btnHelp.addEventListener("click", () => {
           try {
