@@ -652,39 +652,29 @@ body.layout-app #btnTouchPosition {
   text-align: right;
 }
 
-body.layout-app .touch-main-text {
+body.layout-app .touch-main-btn {
   justify-self: center;
   width: 100%;
+  margin: 0;
   padding: 16px 4px;
   min-height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  appearance: none;
+  border: none;
+  background: transparent;
+  box-shadow: none;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   font-size: clamp(16px, 4.2vw, 20px);
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   color: rgba(255, 255, 255, 0.92);
-  pointer-events: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
 }
 
-body.layout-app .touch-main-hit {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  opacity: 0.001;
-  cursor: pointer;
-  pointer-events: auto;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-}
-
-body.layout-app .touch-center:active .touch-main-text {
+body.layout-app .touch-main-btn:active {
   color: #22d3ee;
 }
 

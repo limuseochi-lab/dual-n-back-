@@ -3,7 +3,6 @@
         const els = {
           grid: $("grid"),
           btnStart: $("btnStart"),
-          btnStartText: $("btnStartText"),
           buildTag: $("buildTag"),
           btnReset: $("btnReset"),
           btnHelp: $("btnHelp"),
@@ -159,7 +158,7 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const BUILD_VER = "v17";
+        const BUILD_VER = "v18";
         const AUDIO_VER = BUILD_VER;
         const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
@@ -172,127 +171,56 @@
         let letterBusy = false;
         let letterPlayChain = Promise.resolve();
         let sharedLetterAudio = null;
-        let mobileLetterAudio = null;
+        let activeGainNode = null;
+        let letterEndTimer = null;
         let roundLock = false;
 
-        function getMobileLetterAudio() {
-          if (!mobileLetterAudio) {
-            mobileLetterAudio = new Audio();
-            mobileLetterAudio.preload = "auto";
-            mobileLetterAudio.playsInline = true;
-            mobileLetterAudio.setAttribute("playsinline", "");
+        function fadeStopLetter() {
+          const ctx = getAudioCtx();
+          if (letterEndTimer) {
+            clearTimeout(letterEndTimer);
+            letterEndTimer = null;
           }
-          return mobileLetterAudio;
+          if (activeBufferSource && activeGainNode && ctx) {
+            const t = ctx.currentTime;
+            try {
+              activeGainNode.gain.cancelScheduledValues(t);
+              activeGainNode.gain.setValueAtTime(activeGainNode.gain.value, t);
+              activeGainNode.gain.linearRampToValueAtTime(0.001, t + 0.03);
+              activeBufferSource.stop(t + 0.035);
+            } catch (_) {}
+          }
+          activeBufferSource = null;
+          activeGainNode = null;
+          letterBusy = false;
         }
 
         function stopLetterAudio() {
           letterPlaySeq++;
-          letterBusy = false;
-          if (mobileLetterAudio) {
-            try {
-              mobileLetterAudio.pause();
-            } catch (_) {}
-          }
+          fadeStopLetter();
           for (const osc of activeOscillators) {
             try {
               osc.stop();
             } catch (_) {}
           }
           activeOscillators = [];
-          if (activeClip) {
-            try {
-              activeClip.pause();
-              activeClip.currentTime = 0;
-              activeClip.removeAttribute("src");
-              activeClip.load();
-            } catch (_) {}
-            activeClip = null;
-          }
-          if (sharedLetterAudio) {
-            try {
-              sharedLetterAudio.pause();
-              sharedLetterAudio.currentTime = 0;
-              sharedLetterAudio.removeAttribute("src");
-              sharedLetterAudio.load();
-            } catch (_) {}
-          }
-          if (activeBufferSource) {
-            try {
-              activeBufferSource.stop();
-            } catch (_) {}
-            activeBufferSource = null;
-          }
-          if (window.speechSynthesis) {
-            try {
-              window.speechSynthesis.cancel();
-            } catch (_) {}
-          }
-        }
-
-        async function playLetterSpeech(symbol) {
-          if (!("speechSynthesis" in window)) return false;
-          const word = LETTER_NAMES[symbol] || symbol;
-          const seq = letterPlaySeq;
-          letterBusy = true;
-          return new Promise((resolve) => {
-            let settled = false;
-            const finish = (ok) => {
-              if (settled) return;
-              settled = true;
-              if (seq === letterPlaySeq) letterBusy = false;
-              resolve(ok && seq === letterPlaySeq);
-            };
-            const u = new SpeechSynthesisUtterance(word);
-            u.lang = "en-US";
-            u.rate = 0.86;
-            u.pitch = 1;
-            u.volume = Math.min(1, Math.max(0.55, state.vol));
-            const voice = pickEnglishVoice();
-            if (voice) u.voice = voice;
-            u.onend = () => finish(true);
-            u.onerror = () => finish(false);
-            try {
-              window.speechSynthesis.cancel();
-              window.speechSynthesis.speak(u);
-            } catch (_) {
-              finish(false);
-              return;
+          if (!USE_ELEMENT_AUDIO) {
+            if (activeClip) {
+              try {
+                activeClip.pause();
+              } catch (_) {}
+              activeClip = null;
             }
-            window.setTimeout(() => finish(false), 1100);
-          });
-        }
-
-        async function playLetterMobileWav(symbol) {
-          const a = getMobileLetterAudio();
-          const url = `./audio/${symbol}.wav?${AUDIO_VER}`;
-          const seq = letterPlaySeq;
-          letterBusy = true;
-          a.volume = Math.min(1, Math.max(0.5, state.vol));
-          try {
-            if (!a.paused) a.pause();
-            if (!a.src || !a.src.includes(`${symbol}.wav`)) a.src = url;
-            a.currentTime = 0;
-            await a.play();
-            if (seq !== letterPlaySeq) return false;
-            await new Promise((resolve) => {
-              let settled = false;
-              const done = () => {
-                if (settled) return;
-                settled = true;
-                a.removeEventListener("ended", done);
-                a.removeEventListener("error", done);
-                if (seq === letterPlaySeq) letterBusy = false;
-                resolve();
-              };
-              a.addEventListener("ended", done);
-              a.addEventListener("error", done);
-              const ms = Math.max(420, Math.ceil((a.duration || 0.55) * 1000) + 80);
-              window.setTimeout(done, ms);
-            });
-            return seq === letterPlaySeq;
-          } catch (_) {
-            if (seq === letterPlaySeq) letterBusy = false;
-            return false;
+            if (sharedLetterAudio) {
+              try {
+                sharedLetterAudio.pause();
+              } catch (_) {}
+            }
+            if (window.speechSynthesis) {
+              try {
+                window.speechSynthesis.cancel();
+              } catch (_) {}
+            }
           }
         }
 
@@ -300,7 +228,7 @@
           const bufPlay = playLetterBuffer(symbol, seq);
           if (!bufPlay) return false;
           const ok = await bufPlay;
-          if (ok) await sleep(60);
+          if (ok) await sleep(100);
           return ok;
         }
 
@@ -347,20 +275,27 @@
             src.connect(g);
             g.connect(ctx.destination);
             activeBufferSource = src;
+            activeGainNode = g;
             letterBusy = true;
             return new Promise((resolve) => {
               let settled = false;
               const done = () => {
                 if (settled) return;
                 settled = true;
-                if (activeBufferSource === src) activeBufferSource = null;
+                if (letterEndTimer) {
+                  clearTimeout(letterEndTimer);
+                  letterEndTimer = null;
+                }
+                if (activeBufferSource === src) {
+                  activeBufferSource = null;
+                  activeGainNode = null;
+                }
                 if (seq === letterPlaySeq) letterBusy = false;
                 resolve(seq === letterPlaySeq);
               };
               src.onended = done;
               src.start(t0);
-              src.stop(t0 + dur + 0.02);
-              window.setTimeout(done, Math.ceil(dur * 1000) + 120);
+              letterEndTimer = window.setTimeout(done, Math.ceil(dur * 1000) + 150);
             });
           } catch (_) {
             letterBusy = false;
@@ -390,8 +325,9 @@
         }
 
         async function playLetterClipInner(symbol) {
-          await waitLetterIdle(USE_ELEMENT_AUDIO ? 800 : 520);
-          stopLetterAudio();
+          await waitLetterIdle(USE_ELEMENT_AUDIO ? 1000 : 520);
+          fadeStopLetter();
+          letterPlaySeq++;
           const seq = letterPlaySeq;
           await ensureAudioUnlocked();
           if (!letterAudioReady) await loadLetterBuffers();
@@ -703,9 +639,10 @@
         function updateTouchMainButton() {
           if (!options.touchControls || !els.btnStart) return;
           document.getElementById("btnTouchPause")?.remove();
+          document.getElementById("btnStartText")?.remove();
           const showStop = state.running && !state.paused;
           const text = showStop ? "STOP" : "START";
-          if (els.btnStartText) els.btnStartText.textContent = text;
+          els.btnStart.textContent = text;
           els.btnStart.setAttribute("aria-label", text);
         }
 
