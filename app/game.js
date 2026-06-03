@@ -3,7 +3,7 @@
         const els = {
           grid: $("grid"),
           btnStart: $("btnStart"),
-          btnStartLabel: $("btnStartLabel"),
+          buildTag: $("buildTag"),
           btnReset: $("btnReset"),
           btnHelp: $("btnHelp"),
           btnSettings: $("btnSettings"),
@@ -163,20 +163,50 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const AUDIO_VER = "v12";
+        const BUILD_VER = "v14";
+        const AUDIO_VER = BUILD_VER;
+        const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
         const letterBuffers = Object.create(null);
+        const letterPool = Object.create(null);
         let letterAudioReady = false;
+        let letterPoolReady = false;
         let activeClip = null;
         let activeBufferSource = null;
         let activeOscillators = [];
         let letterPlaySeq = 0;
         let letterBusy = false;
+        let letterPlayChain = Promise.resolve();
         let sharedLetterAudio = null;
+        let roundLock = false;
+
+        function stopLetterPool() {
+          for (const sym of SYMBOLS) {
+            const a = letterPool[sym];
+            if (!a) continue;
+            try {
+              a.pause();
+              a.currentTime = 0;
+            } catch (_) {}
+          }
+        }
+
+        function initLetterPool() {
+          if (letterPoolReady) return;
+          for (const sym of SYMBOLS) {
+            const a = new Audio(`./audio/${sym}.wav?${AUDIO_VER}`);
+            a.preload = "auto";
+            a.playsInline = true;
+            a.setAttribute("playsinline", "");
+            letterPool[sym] = a;
+          }
+          letterPoolReady = true;
+        }
 
         function stopLetterAudio() {
           letterPlaySeq++;
           letterBusy = false;
+          stopLetterPool();
           for (const osc of activeOscillators) {
             try {
               osc.stop();
@@ -213,16 +243,54 @@
           }
         }
 
+        async function playLetterPool(symbol) {
+          initLetterPool();
+          stopLetterPool();
+          const a = letterPool[symbol];
+          if (!a) return false;
+          const seq = letterPlaySeq;
+          letterBusy = true;
+          a.volume = Math.max(0.35, state.vol);
+          try {
+            a.currentTime = 0;
+            await a.play();
+            if (seq !== letterPlaySeq) return false;
+            await new Promise((resolve) => {
+              let settled = false;
+              const done = () => {
+                if (settled) return;
+                settled = true;
+                a.removeEventListener("ended", done);
+                a.removeEventListener("error", done);
+                if (seq === letterPlaySeq) letterBusy = false;
+                resolve();
+              };
+              a.addEventListener("ended", done);
+              a.addEventListener("error", done);
+              window.setTimeout(done, 680);
+            });
+            return seq === letterPlaySeq;
+          } catch (_) {
+            if (seq === letterPlaySeq) letterBusy = false;
+            return false;
+          }
+        }
+
         async function loadLetterBuffers() {
           if (letterAudioReady) return true;
           await ensureAudioUnlocked();
+          if (USE_ELEMENT_AUDIO) {
+            initLetterPool();
+            letterAudioReady = true;
+            return true;
+          }
           const ctx = getAudioCtx();
           let loaded = 0;
           await Promise.all(
             SYMBOLS.map(async (sym) => {
               const url = `./audio/${sym}.wav?${AUDIO_VER}`;
               try {
-                const res = await fetch(url, { cache: "force-cache" });
+                const res = await fetch(url, { cache: "no-store" });
                 if (!res.ok) return;
                 const blob = await res.blob();
                 letterBlobUrls[sym] = URL.createObjectURL(blob);
@@ -270,7 +338,7 @@
           }
         }
 
-        async function waitLetterIdle(maxMs = 520) {
+        async function waitLetterIdle(maxMs = 720) {
           const t0 = nowMs();
           while (letterBusy && nowMs() - t0 < maxMs) {
             await sleep(20);
@@ -278,12 +346,30 @@
         }
 
         async function playLetterClip(symbol) {
-          await waitLetterIdle();
+          const prev = letterPlayChain;
+          let release = () => {};
+          letterPlayChain = new Promise((r) => {
+            release = r;
+          });
+          await prev;
+          try {
+            return await playLetterClipInner(symbol);
+          } finally {
+            release();
+          }
+        }
+
+        async function playLetterClipInner(symbol) {
+          await waitLetterIdle(USE_ELEMENT_AUDIO ? 800 : 520);
           stopLetterAudio();
           const seq = letterPlaySeq;
           await ensureAudioUnlocked();
           if (!letterAudioReady) await loadLetterBuffers();
           if (seq !== letterPlaySeq) return false;
+
+          if (USE_ELEMENT_AUDIO) {
+            return playLetterPool(symbol);
+          }
 
           const bufPlay = playLetterBuffer(symbol, seq);
           if (bufPlay) {
@@ -318,7 +404,11 @@
               };
               sharedLetterAudio.addEventListener("ended", done);
               sharedLetterAudio.addEventListener("error", done);
-              window.setTimeout(done, 520);
+              const durMs = Math.max(
+                380,
+                Math.ceil((sharedLetterAudio.duration || 0.48) * 1000) + 120
+              );
+              window.setTimeout(done, durMs);
             });
             if (seq !== letterPlaySeq) return false;
             return true;
@@ -369,7 +459,7 @@
             return;
           }
 
-          if (options.mobile || isIOS) {
+          if (USE_ELEMENT_AUDIO) {
             if (state.audioMode === "tone") {
               playTone(aud, vol, dur);
               return;
@@ -414,7 +504,8 @@
         }
 
         function playFeedback(ok) {
-          if (letterBusy && (options.mobile || isIOS)) return;
+          if (USE_ELEMENT_AUDIO) return;
+          if (letterBusy) return;
           const ctx = getAudioCtx();
           if (!ctx) return;
           const t0 = ctx.currentTime;
@@ -610,23 +701,16 @@
           });
         }
 
-        function setMainButtonLabel(text, aria) {
-          const label = els.btnStartLabel || els.btnStart;
-          if (!label) return;
-          label.textContent = text;
-          if (els.btnStart) els.btnStart.setAttribute("aria-label", aria);
-        }
-
         function updateTouchMainButton() {
           if (!options.touchControls || !els.btnStart) return;
+          document.getElementById("btnTouchPause")?.remove();
           els.btnStart.hidden = false;
-          if (!state.running) {
-            setMainButtonLabel("START", "Start game");
-          } else if (state.paused) {
-            setMainButtonLabel("START", "Resume game");
-          } else {
-            setMainButtonLabel("STOP", "Pause game");
-          }
+          const showStop = state.running && !state.paused;
+          els.btnStart.dataset.mode = showStop ? "stop" : "start";
+          els.btnStart.setAttribute(
+            "aria-label",
+            showStop ? "Pause game" : state.running ? "Resume game" : "Start game"
+          );
         }
 
         function setRunningUI(running) {
@@ -647,7 +731,10 @@
 
         function setPausedUI(paused) {
           state.paused = paused;
-          if (!state.running) return;
+          if (!state.running) {
+            updateTouchMainButton();
+            return;
+          }
           if (paused) stopLetterAudio();
           if (!options.touchControls) els.btnStart.textContent = paused ? "Resume" : "Pause";
           els.indRun.classList.toggle("live", !paused);
@@ -883,13 +970,24 @@
         // Main loop uses a run token to cancel safely
         let runToken = 0;
         async function runRound() {
+          if (roundLock || state.running) return;
+          roundLock = true;
           runToken++;
           const token = runToken;
-
+          try {
           syncStateFromForm();
+          if (USE_ELEMENT_AUDIO && state.audioMode !== "off") {
+            state.audioMode = "speech";
+            if (els.selAudioMode) els.selAudioMode.value = "speech";
+          }
           resetRoundStats();
           clearLog();
           logLine(`<div class="muted">Round ${state.round} · N=${state.n} · ${state.trials} trials</div>`);
+
+          state.trialIdx = 0;
+          setRunningUI(true);
+          setPausedUI(false);
+          renderHeader();
 
           await unlockAudioHard();
           await ensureAudioUnlocked();
@@ -908,11 +1006,6 @@
             n: state.n,
             targetRate: state.targetRate,
           });
-
-          state.trialIdx = 0;
-          setRunningUI(true);
-          setPausedUI(false);
-          renderHeader();
 
           // countdown
           showToast("Starting…");
@@ -969,16 +1062,21 @@
           }
 
           if (token !== runToken) return;
+          stopLetterAudio();
           setRunningUI(false);
           setPausedUI(false);
           renderHeader();
           renderRoundSummary();
           showToast("Round complete");
           els.btnReset.disabled = false;
+          } finally {
+            roundLock = false;
+          }
         }
 
         function toggleStartPause() {
           if (!state.running) {
+            if (roundLock) return;
             primeSpeechAudible();
             runRound();
             return;
@@ -989,6 +1087,7 @@
 
         function hardReset() {
           runToken++;
+          roundLock = false;
           stopLetterAudio();
           state.round = 1;
           resetRoundStats();
@@ -1127,7 +1226,5 @@
         renderHeader();
         updateTouchMainButton();
 
-        if (options.registerSw && "serviceWorker" in navigator) {
-          navigator.serviceWorker.register(options.swPath || "./sw.js").catch(() => {});
-        }
+        if (els.buildTag) els.buildTag.textContent = BUILD_VER;
 };
