@@ -618,25 +618,26 @@ body.layout-app .touch-center-gap {
   pointer-events: none;
 }
 
-body.layout-app .touch-start-lbl {
+body.layout-app .touch-start-wrap {
   position: fixed;
   left: 50%;
   bottom: calc(20px + env(safe-area-inset-bottom));
   z-index: 55;
-  width: 128px;
-  height: 32px;
+  width: 72px;
+  height: 28px;
   margin: 0;
   padding: 0;
   transform: translateX(-50%);
   pointer-events: none;
   contain: strict;
   isolation: isolate;
+  will-change: opacity;
 }
 
-body.layout-app #btnStartCanvas {
+body.layout-app .touch-ctrl-svg {
   display: block;
-  width: 128px;
-  height: 32px;
+  width: 72px;
+  height: 28px;
 }
 
 body.layout-app .touch-start-hit {
