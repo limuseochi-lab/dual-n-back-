@@ -676,6 +676,24 @@ body.layout-app .touch-main-btn {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   transform: translateZ(0);
+  overflow: hidden;
+}
+
+body.layout-app .touch-main-lbl {
+  display: block;
+  line-height: 1.15;
+  pointer-events: none;
+}
+
+body.layout-app dialog.modal .form label {
+  pointer-events: none;
+}
+
+body.layout-app dialog.modal .form label input,
+body.layout-app dialog.modal .form label select,
+body.layout-app dialog.modal .form label .stepper,
+body.layout-app dialog.modal .form label .stepper * {
+  pointer-events: auto;
 }
 
 body.layout-app .touch-main-btn:active {

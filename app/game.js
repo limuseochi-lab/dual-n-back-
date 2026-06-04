@@ -33,6 +33,7 @@
           inpTrials: $("inpTrials"),
           inpStimMs: $("inpStimMs"),
           inpIsiMs: $("inpIsiMs"),
+          inpLetterRate: $("inpLetterRate"),
           selAudioMode: $("selAudioMode"),
           rngVol: $("rngVol"),
           rngTargetRate: $("rngTargetRate"),
@@ -158,7 +159,7 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const BUILD_VER = "v19";
+        const BUILD_VER = "v20";
         const AUDIO_VER = BUILD_VER;
         const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
@@ -246,7 +247,7 @@
             };
             const u = new SpeechSynthesisUtterance(word);
             u.lang = "en-US";
-            u.rate = 0.78;
+            u.rate = clamp(state.letterRate, 0.85, 1.35);
             u.pitch = 1.02;
             u.volume = Math.min(1, Math.max(0.65, state.vol));
             const voice = pickEnglishVoice();
@@ -265,18 +266,20 @@
         }
 
         async function playLetterMobile(symbol, seq) {
-          if (USE_ELEMENT_AUDIO) {
-            const spoke = await playLetterSpeech(symbol, seq);
-            if (spoke) {
-              await sleep(120);
+          const bufPlay = playLetterBuffer(symbol, seq);
+          if (bufPlay) {
+            const ok = await bufPlay;
+            if (ok) {
+              await sleep(50);
               return true;
             }
           }
-          const bufPlay = playLetterBuffer(symbol, seq);
-          if (!bufPlay) return false;
-          const ok = await bufPlay;
-          if (ok) await sleep(150);
-          return ok;
+          const spoke = await playLetterSpeech(symbol, seq);
+          if (spoke) {
+            await sleep(60);
+            return true;
+          }
+          return false;
         }
 
         async function loadLetterBuffers() {
@@ -311,10 +314,12 @@
           try {
             const t0 = ctx.currentTime;
             const peak = Math.min(1, Math.max(0.45, state.vol));
-            const dur = buf.duration;
+            const rate = clamp(state.letterRate, 0.85, 1.35);
+            const dur = buf.duration / rate;
             const src = ctx.createBufferSource();
             const g = ctx.createGain();
             src.buffer = buf;
+            src.playbackRate.value = rate;
             g.gain.setValueAtTime(0.001, t0);
             g.gain.linearRampToValueAtTime(peak, t0 + 0.02);
             g.gain.setValueAtTime(peak, Math.max(t0 + 0.03, t0 + dur - 0.12));
@@ -405,6 +410,7 @@
             sharedLetterAudio.currentTime = 0;
             sharedLetterAudio.src = url;
             sharedLetterAudio.volume = Math.max(0.35, state.vol);
+            sharedLetterAudio.playbackRate = clamp(state.letterRate, 0.85, 1.35);
             activeClip = sharedLetterAudio;
             letterBusy = true;
             await sharedLetterAudio.play();
@@ -553,6 +559,7 @@
           audioMode: "speech",
           vol: 0.4,
           targetRate: 0.25,
+          letterRate: 1.05,
           caption: "off",
           // generated per round
           seqPos: [],
@@ -587,6 +594,7 @@
             state.audioMode = typeof s.audioMode === "string" ? s.audioMode : "speech";
             state.vol = clamp(Number(s.vol) ?? 0.4, 0, 1);
             state.targetRate = clamp(Number(s.targetRate) || 0.25, 0.1, 0.5);
+            state.letterRate = clamp(Number(s.letterRate) || 1.05, 0.85, 1.35);
             state.caption = s.caption === "on" ? "on" : "off";
           } catch (_) {}
         }
@@ -600,6 +608,7 @@
             audioMode: state.audioMode,
             vol: state.vol,
             targetRate: state.targetRate,
+            letterRate: state.letterRate,
             caption: state.caption,
           };
           try {
@@ -612,6 +621,7 @@
           els.inpTrials.value = String(state.trials);
           els.inpStimMs.value = String(state.stimMs);
           els.inpIsiMs.value = String(state.isiMs);
+          if (els.inpLetterRate) els.inpLetterRate.value = String(state.letterRate);
           els.selAudioMode.value = state.audioMode;
           els.rngVol.value = String(state.vol);
           els.rngTargetRate.value = String(state.targetRate);
@@ -624,6 +634,9 @@
           state.stimMs = clamp(parseInt(els.inpStimMs.value, 10) || 500, 300, 1500);
           state.isiMs = clamp(parseInt(els.inpIsiMs.value, 10) || 1500, 300, 2500);
           state.isiMs = Math.max(state.isiMs, state.stimMs);
+          if (els.inpLetterRate) {
+            state.letterRate = clamp(parseFloat(els.inpLetterRate.value) || 1.05, 0.85, 1.35);
+          }
           state.audioMode = els.selAudioMode.value;
           state.vol = clamp(parseFloat(els.rngVol.value) || 0, 0, 1);
           state.targetRate = clamp(parseFloat(els.rngTargetRate.value) || 0.25, 0.1, 0.5);
@@ -696,9 +709,13 @@
           els.stScore.textContent = `${state.score}`;
         }
 
+        function settingsBlocked() {
+          return state.running && !state.paused;
+        }
+
         function setFormDisabled(disabled) {
           if (!els.form) return;
-          const lock = disabled && state.running;
+          const lock = disabled && settingsBlocked();
           els.form.querySelectorAll("input, select, .step-btn").forEach((el) => {
             el.disabled = lock;
           });
@@ -708,14 +725,15 @@
           if (!options.touchControls || !els.btnStart) return;
           document.getElementById("btnTouchPause")?.remove();
           document.getElementById("btnStartText")?.remove();
-          const showStop = state.running && !state.paused;
-          const text = showStop ? "STOP" : "START";
-          if (els.btnStart.tagName === "INPUT") {
+          const text = state.running ? "STOP" : "START";
+          const lbl = $("btnStartLbl");
+          if (lbl) {
+            lbl.replaceChildren(document.createTextNode(text));
+          } else if (els.btnStart.tagName === "INPUT") {
             els.btnStart.value = text;
           } else {
-            els.btnStart.textContent = text;
+            els.btnStart.replaceChildren(document.createTextNode(text));
           }
-          els.btnStart.setAttribute("aria-label", text);
         }
 
         function setRunningUI(running) {
@@ -1085,6 +1103,17 @@
           }
         }
 
+        function stopRound() {
+          runToken++;
+          roundLock = false;
+          stopLetterAudio();
+          state.trialIdx = -1;
+          setRunningUI(false);
+          setPausedUI(false);
+          renderHeader();
+          els.btnReset.disabled = false;
+        }
+
         function toggleStartPause() {
           if (!state.running) {
             if (roundLock) return;
@@ -1092,8 +1121,51 @@
             runRound();
             return;
           }
+          if (options.touchControls) {
+            stopRound();
+            showToast("Stopped");
+            return;
+          }
           setPausedUI(!state.paused);
           showToast(state.paused ? "Paused" : "Resumed");
+        }
+
+        function applyStepDelta(btn) {
+          if (!btn || btn.disabled) return;
+          const t = Date.now();
+          if (btn._lastStepTap && t - btn._lastStepTap < 360) return;
+          btn._lastStepTap = t;
+          if (settingsBlocked()) {
+            showToast("Tap STOP first to change settings");
+            return;
+          }
+          const input = $(btn.dataset.step);
+          if (!input) return;
+          const delta = parseFloat(btn.dataset.delta) || 0;
+          const min = parseFloat(input.min);
+          const max = parseFloat(input.max);
+          const step = parseFloat(input.step) || 1;
+          let val = parseFloat(input.value);
+          if (!Number.isFinite(val)) val = min;
+          val = clamp(val + delta, min, max);
+          if (step >= 1) val = Math.round(val);
+          else val = Math.round(val / step) * step;
+          val = clamp(val, min, max);
+          input.value = String(Number(val.toFixed(step < 1 ? 2 : 0)));
+          syncStateFromForm();
+        }
+
+        function bindStepButtons() {
+          if (!els.form) return;
+          els.form.querySelectorAll(".step-btn").forEach((btn) => {
+            const run = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              applyStepDelta(btn);
+            };
+            btn.addEventListener("click", run);
+            btn.addEventListener("pointerup", run);
+          });
         }
 
         function hardReset() {
@@ -1136,8 +1208,8 @@
         if (els.btnSettings && els.dlgSettings) {
           els.btnSettings.addEventListener("click", () => {
             setFormDisabled(false);
-            if (state.running) {
-              showToast("Stop the game first to change settings");
+            if (settingsBlocked()) {
+              showToast("Tap STOP first to change settings");
             }
             try {
               els.dlgSettings.showModal();
@@ -1149,28 +1221,11 @@
         }
 
         els.form.addEventListener("input", () => {
-          if (state.running) return;
+          if (settingsBlocked()) return;
           syncStateFromForm();
         });
 
-        els.form.addEventListener("click", (e) => {
-          const btn = e.target.closest(".step-btn");
-          if (!btn) return;
-          e.preventDefault();
-          if (state.running) {
-            showToast("Stop the game first to change settings");
-            return;
-          }
-          const input = $(btn.dataset.step);
-          if (!input) return;
-          const delta = parseInt(btn.dataset.delta, 10) || 0;
-          const min = parseFloat(input.min);
-          const max = parseFloat(input.max);
-          let val = parseInt(input.value, 10) || 0;
-          val = clamp(val + delta, min, max);
-          input.value = String(val);
-          syncStateFromForm();
-        });
+        bindStepButtons();
 
         if (options.touchControls) {
           document.addEventListener(
