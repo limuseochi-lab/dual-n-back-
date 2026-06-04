@@ -162,7 +162,7 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const BUILD_VER = "v23";
+        const BUILD_VER = "v25";
         const AUDIO_VER = BUILD_VER;
         const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
@@ -710,7 +710,7 @@
           state.seqPos = [];
           state.seqAud = [];
           setFormDisabled(false);
-          updateTouchMainButton();
+          if (options.touchControls) updateTouchMainButton();
           els.btnReset.disabled = false;
           els.indRun.classList.remove("live");
           els.ansV.textContent = "-";
@@ -764,29 +764,42 @@
           });
         }
 
-        function repaintStartGlyph() {
-          const wrap = $("btnStartWrap");
-          if (wrap) void wrap.offsetHeight;
+        function purgeLegacyStartControls() {
+          [
+            "btnTouchPause",
+            "btnStartText",
+            "btnStartWrap",
+            "btnStartLbl",
+            "btnStartCanvas",
+            "glyphStart",
+            "glyphStop",
+          ].forEach((id) => document.getElementById(id)?.remove());
+          document.querySelector(".touch-start-hit")?.remove();
+          document.querySelector(".touch-start-wrap")?.remove();
+          document.querySelector(".touch-center-gap")?.remove();
         }
 
         function updateTouchMainButton() {
-          if (!options.touchControls || !els.btnStart) return;
-          document.getElementById("btnTouchPause")?.remove();
-          document.getElementById("btnStartText")?.remove();
-          document.getElementById("btnStartLbl")?.remove();
-          document.getElementById("btnStartCanvas")?.remove();
-          const showStop = state.running;
-          const g0 = $("glyphStart");
-          const g1 = $("glyphStop");
-          if (g0) g0.style.display = showStop ? "none" : "block";
-          if (g1) g1.style.display = showStop ? "block" : "none";
-          const wrap = $("btnStartWrap");
-          if (wrap) {
-            wrap.classList.toggle("is-stop", showStop);
-            wrap.classList.toggle("is-start", !showStop);
-          }
-          els.btnStart.setAttribute("aria-label", showStop ? "Stop game" : "Start game");
-          repaintStartGlyph();
+          if (!els.btnStart || !options.touchControls) return;
+          purgeLegacyStartControls();
+          els.btnStart.textContent = state.running ? "STOP" : "START";
+        }
+
+        function waitPaintFrames(frames = 2) {
+          return new Promise((resolve) => {
+            let n = 0;
+            const step = () => {
+              n++;
+              if (n >= frames) resolve();
+              else requestAnimationFrame(step);
+            };
+            requestAnimationFrame(step);
+          });
+        }
+
+        async function syncVisualBeforeAudio() {
+          await waitPaintFrames(2);
+          if (USE_ELEMENT_AUDIO) await sleep(150);
         }
 
         function setRunningUI(running) {
@@ -801,19 +814,19 @@
             if (!options.touchControls) els.btnStart.textContent = "START";
           }
           els.btnReset.disabled = false;
-          updateTouchMainButton();
+          if (options.touchControls) updateTouchMainButton();
         }
 
         function setPausedUI(paused) {
           state.paused = paused;
           if (!state.running) {
-            updateTouchMainButton();
+            if (options.touchControls) updateTouchMainButton();
             return;
           }
           if (paused) stopLetterAudio();
           if (!options.touchControls) els.btnStart.textContent = paused ? "Resume" : "Pause";
           els.indRun.classList.toggle("live", !paused);
-          updateTouchMainButton();
+          if (options.touchControls) updateTouchMainButton();
         }
 
         function toggleStatsPanel() {
@@ -976,9 +989,11 @@
         }
 
         function highlightPosition(posIdx) {
-          clearGridActive();
           const cell = els.grid.querySelector(`.cell[data-idx="${posIdx}"]`);
-          if (cell) cell.classList.add("active");
+          if (cell) {
+            cell.classList.add("active");
+            void cell.offsetWidth;
+          }
         }
 
         function renderCaption(symbol) {
@@ -995,6 +1010,8 @@
           const pos = state.seqPos[trialIndex];
           const aud = state.seqAud[trialIndex];
 
+          haltLetterPool();
+          clearGridActive();
           highlightPosition(pos);
           state.trialOpenedAt = nowMs();
           resetPerTrialInputs();
@@ -1003,6 +1020,8 @@
           const vAns = isMatch(state.seqPos, trialIndex, n);
           const aAns = state.audioMode === "off" ? false : isMatch(state.seqAud, trialIndex, n);
           setAnswerChips(vAns, aAns);
+
+          await syncVisualBeforeAudio();
 
           if (state.audioMode !== "off") {
             const symbol = SYMBOLS[aud];
@@ -1288,11 +1307,6 @@
             },
             { passive: true }
           );
-          const nudgeStartGlyph = () => {
-            repaintStartGlyph();
-          };
-          els.btnTouchSound.addEventListener("pointerdown", nudgeStartGlyph, { passive: true });
-          els.btnTouchPosition.addEventListener("pointerdown", nudgeStartGlyph, { passive: true });
           els.btnTouchSound.addEventListener("click", () => {
             unlockAudioHard();
             handlePress("A");
@@ -1358,7 +1372,10 @@
         clearLog();
         resetRuntime();
         renderHeader();
-        updateTouchMainButton();
+        if (options.touchControls) {
+          purgeLegacyStartControls();
+          updateTouchMainButton();
+        }
         setFormDisabled(false);
 
 };
