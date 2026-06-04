@@ -75,11 +75,43 @@
           el.style.width = `${half}px`;
           el.style.height = `${rect.height}px`;
           el.classList.remove("ok", "bad", "show");
+          void el.offsetWidth;
           el.classList.add(ok ? "ok" : "bad", "show");
           window.clearTimeout(flashHalf[side]);
           flashHalf[side] = window.setTimeout(() => {
             el.classList.remove("show");
-          }, 180);
+          }, 240);
+        }
+
+        const pendingTouchPress = new Set();
+        let touchPressRaf = 0;
+
+        function queueTouchPress(which) {
+          pendingTouchPress.add(which);
+          if (touchPressRaf) return;
+          touchPressRaf = requestAnimationFrame(() => {
+            touchPressRaf = 0;
+            const batch = [...pendingTouchPress];
+            pendingTouchPress.clear();
+            if (options.mobile || options.touchControls) unlockAudioHard();
+            for (const w of batch) handlePress(w);
+          });
+        }
+
+        function bindTouchZone(btn, which) {
+          if (!btn) return;
+          const onPointer = (e) => {
+            if (e.pointerType === "mouse" && e.button !== 0) return;
+            queueTouchPress(which);
+          };
+          btn.addEventListener("pointerdown", onPointer, { passive: true });
+          btn.addEventListener(
+            "touchstart",
+            () => {
+              queueTouchPress(which);
+            },
+            { passive: true }
+          );
         }
 
         function logLine(html) {
@@ -163,7 +195,7 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const BUILD_VER = "v27";
+        const BUILD_VER = "v28";
         const AUDIO_VER = BUILD_VER;
         const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
@@ -1304,14 +1336,8 @@
             },
             { passive: true }
           );
-          els.btnTouchSound.addEventListener("click", () => {
-            unlockAudioHard();
-            handlePress("A");
-          });
-          els.btnTouchPosition.addEventListener("click", () => {
-            unlockAudioHard();
-            handlePress("V");
-          });
+          bindTouchZone(els.btnTouchSound, "A");
+          bindTouchZone(els.btnTouchPosition, "V");
           if (els.btnStats) {
             els.btnStats.addEventListener("click", () => toggleStatsPanel());
           }
