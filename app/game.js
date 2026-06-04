@@ -158,7 +158,7 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const BUILD_VER = "v18";
+        const BUILD_VER = "v19";
         const AUDIO_VER = BUILD_VER;
         const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
@@ -186,8 +186,8 @@
             try {
               activeGainNode.gain.cancelScheduledValues(t);
               activeGainNode.gain.setValueAtTime(activeGainNode.gain.value, t);
-              activeGainNode.gain.linearRampToValueAtTime(0.001, t + 0.03);
-              activeBufferSource.stop(t + 0.035);
+              activeGainNode.gain.linearRampToValueAtTime(0.001, t + 0.05);
+              activeBufferSource.stop(t + 0.055);
             } catch (_) {}
           }
           activeBufferSource = null;
@@ -195,9 +195,17 @@
           letterBusy = false;
         }
 
+        function cancelSpeechIfSpeaking() {
+          if (!window.speechSynthesis || !window.speechSynthesis.speaking) return;
+          try {
+            window.speechSynthesis.cancel();
+          } catch (_) {}
+        }
+
         function stopLetterAudio() {
           letterPlaySeq++;
           fadeStopLetter();
+          cancelSpeechIfSpeaking();
           for (const osc of activeOscillators) {
             try {
               osc.stop();
@@ -224,11 +232,50 @@
           }
         }
 
+        async function playLetterSpeech(symbol, seq) {
+          if (!("speechSynthesis" in window)) return false;
+          const word = LETTER_NAMES[symbol] || symbol;
+          letterBusy = true;
+          return new Promise((resolve) => {
+            let settled = false;
+            const finish = (ok) => {
+              if (settled) return;
+              settled = true;
+              if (seq === letterPlaySeq) letterBusy = false;
+              resolve(ok && seq === letterPlaySeq);
+            };
+            const u = new SpeechSynthesisUtterance(word);
+            u.lang = "en-US";
+            u.rate = 0.78;
+            u.pitch = 1.02;
+            u.volume = Math.min(1, Math.max(0.65, state.vol));
+            const voice = pickEnglishVoice();
+            if (voice) u.voice = voice;
+            u.onend = () => finish(true);
+            u.onerror = () => finish(false);
+            cancelSpeechIfSpeaking();
+            try {
+              window.speechSynthesis.speak(u);
+            } catch (_) {
+              finish(false);
+              return;
+            }
+            window.setTimeout(() => finish(false), 1300);
+          });
+        }
+
         async function playLetterMobile(symbol, seq) {
+          if (USE_ELEMENT_AUDIO) {
+            const spoke = await playLetterSpeech(symbol, seq);
+            if (spoke) {
+              await sleep(120);
+              return true;
+            }
+          }
           const bufPlay = playLetterBuffer(symbol, seq);
           if (!bufPlay) return false;
           const ok = await bufPlay;
-          if (ok) await sleep(100);
+          if (ok) await sleep(150);
           return ok;
         }
 
@@ -270,8 +317,8 @@
             src.buffer = buf;
             g.gain.setValueAtTime(0.001, t0);
             g.gain.linearRampToValueAtTime(peak, t0 + 0.02);
-            g.gain.setValueAtTime(peak, Math.max(t0 + 0.03, t0 + dur - 0.05));
-            g.gain.linearRampToValueAtTime(0.001, t0 + dur);
+            g.gain.setValueAtTime(peak, Math.max(t0 + 0.03, t0 + dur - 0.12));
+            g.gain.linearRampToValueAtTime(0.001, t0 + dur + 0.02);
             src.connect(g);
             g.connect(ctx.destination);
             activeBufferSource = src;
@@ -325,8 +372,12 @@
         }
 
         async function playLetterClipInner(symbol) {
-          await waitLetterIdle(USE_ELEMENT_AUDIO ? 1000 : 520);
-          fadeStopLetter();
+          await waitLetterIdle(USE_ELEMENT_AUDIO ? 1200 : 520);
+          if (letterBusy) {
+            fadeStopLetter();
+            cancelSpeechIfSpeaking();
+            await sleep(50);
+          }
           letterPlaySeq++;
           const seq = letterPlaySeq;
           await ensureAudioUnlocked();
@@ -393,7 +444,24 @@
         async function primeSpeechAudible() {
           await unlockAudioHard();
           await ensureAudioUnlocked();
-          if (!USE_ELEMENT_AUDIO) pickEnglishVoice();
+          pickEnglishVoice();
+          if (USE_ELEMENT_AUDIO && window.speechSynthesis) {
+            await new Promise((resolve) => {
+              const u = new SpeechSynthesisUtterance(" ");
+              u.volume = 0.01;
+              u.lang = "en-US";
+              const voice = pickEnglishVoice();
+              if (voice) u.voice = voice;
+              u.onend = resolve;
+              u.onerror = resolve;
+              try {
+                window.speechSynthesis.speak(u);
+              } catch (_) {
+                resolve();
+              }
+              window.setTimeout(resolve, 500);
+            });
+          }
           const ok = await loadLetterBuffers();
           if (!ok) showToast("Audio files missing — upload app/audio to GitHub");
         }
@@ -642,7 +710,11 @@
           document.getElementById("btnStartText")?.remove();
           const showStop = state.running && !state.paused;
           const text = showStop ? "STOP" : "START";
-          els.btnStart.textContent = text;
+          if (els.btnStart.tagName === "INPUT") {
+            els.btnStart.value = text;
+          } else {
+            els.btnStart.textContent = text;
+          }
           els.btnStart.setAttribute("aria-label", text);
         }
 

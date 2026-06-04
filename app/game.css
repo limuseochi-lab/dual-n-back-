@@ -659,23 +659,28 @@ body.layout-app .touch-main-btn {
   padding: 16px 4px;
   min-height: 56px;
   appearance: none;
+  -webkit-appearance: none;
   border: none;
   background: transparent;
   box-shadow: none;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   font-size: clamp(16px, 4.2vw, 20px);
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   color: rgba(255, 255, 255, 0.92);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transform: translateZ(0);
 }
 
 body.layout-app .touch-main-btn:active {
   color: #22d3ee;
+  opacity: 0.88;
 }
 
 body.layout-app .build-tag {
