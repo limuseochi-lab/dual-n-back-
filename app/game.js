@@ -159,7 +159,7 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const BUILD_VER = "v20";
+        const BUILD_VER = "v21";
         const AUDIO_VER = BUILD_VER;
         const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
@@ -176,7 +176,7 @@
         let letterEndTimer = null;
         let roundLock = false;
 
-        function fadeStopLetter() {
+        function softStopLetter(fadeSec = 0.07) {
           const ctx = getAudioCtx();
           if (letterEndTimer) {
             clearTimeout(letterEndTimer);
@@ -185,15 +185,14 @@
           if (activeBufferSource && activeGainNode && ctx) {
             const t = ctx.currentTime;
             try {
-              activeGainNode.gain.cancelScheduledValues(t);
-              activeGainNode.gain.setValueAtTime(activeGainNode.gain.value, t);
-              activeGainNode.gain.linearRampToValueAtTime(0.001, t + 0.05);
-              activeBufferSource.stop(t + 0.055);
+              const g = activeGainNode.gain;
+              g.cancelScheduledValues(t);
+              g.setValueAtTime(Math.max(0.0001, g.value), t);
+              g.linearRampToValueAtTime(0.0001, t + fadeSec);
             } catch (_) {}
+          } else {
+            letterBusy = false;
           }
-          activeBufferSource = null;
-          activeGainNode = null;
-          letterBusy = false;
         }
 
         function cancelSpeechIfSpeaking() {
@@ -205,7 +204,7 @@
 
         function stopLetterAudio() {
           letterPlaySeq++;
-          fadeStopLetter();
+          softStopLetter();
           cancelSpeechIfSpeaking();
           for (const osc of activeOscillators) {
             try {
@@ -213,23 +212,17 @@
             } catch (_) {}
           }
           activeOscillators = [];
-          if (!USE_ELEMENT_AUDIO) {
-            if (activeClip) {
-              try {
-                activeClip.pause();
-              } catch (_) {}
-              activeClip = null;
-            }
-            if (sharedLetterAudio) {
-              try {
-                sharedLetterAudio.pause();
-              } catch (_) {}
-            }
-            if (window.speechSynthesis) {
-              try {
-                window.speechSynthesis.cancel();
-              } catch (_) {}
-            }
+          if (activeClip) {
+            try {
+              activeClip.pause();
+            } catch (_) {}
+            activeClip = null;
+          }
+          if (sharedLetterAudio) {
+            try {
+              sharedLetterAudio.pause();
+              sharedLetterAudio.currentTime = 0;
+            } catch (_) {}
           }
         }
 
@@ -267,19 +260,10 @@
 
         async function playLetterMobile(symbol, seq) {
           const bufPlay = playLetterBuffer(symbol, seq);
-          if (bufPlay) {
-            const ok = await bufPlay;
-            if (ok) {
-              await sleep(50);
-              return true;
-            }
-          }
-          const spoke = await playLetterSpeech(symbol, seq);
-          if (spoke) {
-            await sleep(60);
-            return true;
-          }
-          return false;
+          if (!bufPlay) return false;
+          const ok = await bufPlay;
+          if (ok) await sleep(30);
+          return ok;
         }
 
         async function loadLetterBuffers() {
@@ -320,10 +304,11 @@
             const g = ctx.createGain();
             src.buffer = buf;
             src.playbackRate.value = rate;
-            g.gain.setValueAtTime(0.001, t0);
-            g.gain.linearRampToValueAtTime(peak, t0 + 0.02);
-            g.gain.setValueAtTime(peak, Math.max(t0 + 0.03, t0 + dur - 0.12));
-            g.gain.linearRampToValueAtTime(0.001, t0 + dur + 0.02);
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.linearRampToValueAtTime(peak, t0 + 0.035);
+            const fadeOut = Math.min(0.09, dur * 0.22);
+            g.gain.setValueAtTime(peak, Math.max(t0 + 0.05, t0 + dur - fadeOut));
+            g.gain.linearRampToValueAtTime(0.0001, t0 + dur + 0.04);
             src.connect(g);
             g.connect(ctx.destination);
             activeBufferSource = src;
@@ -377,11 +362,11 @@
         }
 
         async function playLetterClipInner(symbol) {
-          await waitLetterIdle(USE_ELEMENT_AUDIO ? 1200 : 520);
+          await waitLetterIdle(USE_ELEMENT_AUDIO ? 620 : 520);
           if (letterBusy) {
-            fadeStopLetter();
-            cancelSpeechIfSpeaking();
-            await sleep(50);
+            await sleep(80);
+            if (letterBusy) softStopLetter(0.09);
+            await sleep(USE_ELEMENT_AUDIO ? 70 : 40);
           }
           letterPlaySeq++;
           const seq = letterPlaySeq;
@@ -451,23 +436,6 @@
           await unlockAudioHard();
           await ensureAudioUnlocked();
           pickEnglishVoice();
-          if (USE_ELEMENT_AUDIO && window.speechSynthesis) {
-            await new Promise((resolve) => {
-              const u = new SpeechSynthesisUtterance(" ");
-              u.volume = 0.01;
-              u.lang = "en-US";
-              const voice = pickEnglishVoice();
-              if (voice) u.voice = voice;
-              u.onend = resolve;
-              u.onerror = resolve;
-              try {
-                window.speechSynthesis.speak(u);
-              } catch (_) {
-                resolve();
-              }
-              window.setTimeout(resolve, 500);
-            });
-          }
           const ok = await loadLetterBuffers();
           if (!ok) showToast("Audio files missing — upload app/audio to GitHub");
         }
@@ -559,7 +527,7 @@
           audioMode: "speech",
           vol: 0.4,
           targetRate: 0.25,
-          letterRate: 1.05,
+          letterRate: 1.12,
           caption: "off",
           // generated per round
           seqPos: [],
@@ -594,7 +562,7 @@
             state.audioMode = typeof s.audioMode === "string" ? s.audioMode : "speech";
             state.vol = clamp(Number(s.vol) ?? 0.4, 0, 1);
             state.targetRate = clamp(Number(s.targetRate) || 0.25, 0.1, 0.5);
-            state.letterRate = clamp(Number(s.letterRate) || 1.05, 0.85, 1.35);
+            state.letterRate = clamp(Number(s.letterRate) || 1.12, 0.85, 1.35);
             state.caption = s.caption === "on" ? "on" : "off";
           } catch (_) {}
         }
@@ -635,7 +603,7 @@
           state.isiMs = clamp(parseInt(els.inpIsiMs.value, 10) || 1500, 300, 2500);
           state.isiMs = Math.max(state.isiMs, state.stimMs);
           if (els.inpLetterRate) {
-            state.letterRate = clamp(parseFloat(els.inpLetterRate.value) || 1.05, 0.85, 1.35);
+            state.letterRate = clamp(parseFloat(els.inpLetterRate.value) || 1.12, 0.85, 1.35);
           }
           state.audioMode = els.selAudioMode.value;
           state.vol = clamp(parseFloat(els.rngVol.value) || 0, 0, 1);
@@ -727,13 +695,8 @@
           document.getElementById("btnStartText")?.remove();
           const text = state.running ? "STOP" : "START";
           const lbl = $("btnStartLbl");
-          if (lbl) {
-            lbl.replaceChildren(document.createTextNode(text));
-          } else if (els.btnStart.tagName === "INPUT") {
-            els.btnStart.value = text;
-          } else {
-            els.btnStart.replaceChildren(document.createTextNode(text));
-          }
+          if (lbl) lbl.textContent = text;
+          els.btnStart.setAttribute("aria-label", text);
         }
 
         function setRunningUI(running) {
