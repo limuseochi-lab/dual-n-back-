@@ -58,6 +58,7 @@
         }
 
         function showToast(text) {
+          if (!els.toast || options.touchControls) return;
           els.toast.textContent = text;
           els.toast.classList.add("show");
           window.clearTimeout(showToast._t);
@@ -162,7 +163,7 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const BUILD_VER = "v25";
+        const BUILD_VER = "v27";
         const AUDIO_VER = BUILD_VER;
         const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
@@ -1098,10 +1099,6 @@
             n: state.n,
             targetRate: state.targetRate,
           });
-
-          // countdown
-          showToast("Starting…");
-          await sleep(250);
 
           setRunningUI(true);
           setPausedUI(false);

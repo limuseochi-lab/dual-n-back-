@@ -596,16 +596,13 @@ body.layout-app .status-compact.stats-hidden {
   display: none;
 }
 
-body.layout-app .btn-start-run {
-  min-width: 4.6rem;
-  text-align: center;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
 body.layout-app button:hover,
 body.layout-app button:active {
   transform: none;
+}
+
+body.layout-app .toast {
+  display: none !important;
 }
 
 body.layout-app .touch-bar {
@@ -615,11 +612,34 @@ body.layout-app .touch-bar {
   bottom: 0;
   z-index: 50;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr auto 1fr;
   align-items: end;
   gap: 8px;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
   pointer-events: none;
+}
+
+body.layout-app .touch-center-btn {
+  pointer-events: auto;
+  justify-self: center;
+  appearance: none;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.92);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-size: clamp(14px, 3.8vw, 17px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding: 16px 10px;
+  min-width: 5.2rem;
+  min-height: 56px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+body.layout-app .touch-center-btn:active {
+  color: #22d3ee;
 }
 
 body.layout-app .touch-zone {

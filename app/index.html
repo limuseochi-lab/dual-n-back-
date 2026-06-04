@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="./icons/icon-180.png" />
     <link rel="icon" href="./icons/icon-180.png" type="image/png" />
     <title>Dual N-Back</title>
-    <link rel="stylesheet" href="./game.css?v=25" />
+    <link rel="stylesheet" href="./game.css?v=27" />
   </head>
   <body class="layout-app">
     <div id="buildTag" class="build-tag">…</div>
@@ -29,7 +29,6 @@
               </div>
             </div>
             <div class="btns">
-              <button type="button" class="btn-start-run app-only" id="btnStart">START</button>
               <button class="ghost" id="btnHelp" type="button">Help</button>
               <button id="btnReset" type="button">Reset</button>
               <button id="btnSettings" type="button">Settings</button>
@@ -65,6 +64,7 @@
 
     <div class="touch-bar app-only" aria-label="Touch controls">
       <button type="button" class="touch-zone" id="btnTouchSound" aria-label="Sound match">SOUND</button>
+      <button type="button" class="touch-center-btn" id="btnStart">START</button>
       <button type="button" class="touch-zone" id="btnTouchPosition" aria-label="Position match">POSITION</button>
     </div>
 
@@ -183,7 +183,7 @@
         <ul style="margin: 10px 0 0; padding-left: 18px">
           <li><strong>POSITION</strong>: tap when the current position matches <strong>N trials ago</strong></li>
           <li><strong>SOUND</strong>: tap when the current sound matches <strong>N trials ago</strong></li>
-          <li><strong>START / STOP</strong> (top bar): start or end the round — bottom is SOUND / POSITION only</li>
+          <li><strong>START / STOP</strong> (center): start or end the round — sides are SOUND / POSITION</li>
           <li><strong>INFO</strong>: show or hide round, N, trial, and score</li>
           <li>The first <strong>N</strong> trials have no matches.</li>
         </ul>
@@ -198,7 +198,7 @@
 
     <script>
       (function () {
-        var VER = "25";
+        var VER = "27";
         var tag = document.getElementById("buildTag");
         function showVer() {
           if (tag) tag.textContent = "v" + VER;
