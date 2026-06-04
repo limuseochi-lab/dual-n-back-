@@ -610,21 +610,61 @@ body.layout-app .touch-bar {
   pointer-events: none;
 }
 
-body.layout-app .touch-center {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+body.layout-app .touch-center-gap {
   width: 6.75rem;
   min-width: 6.75rem;
   max-width: 6.75rem;
   min-height: 56px;
-  overflow: hidden;
-  pointer-events: auto;
+  pointer-events: none;
+}
+
+body.layout-app .touch-start-lbl {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  z-index: 55;
+  width: 128px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+  contain: strict;
   isolation: isolate;
-  contain: layout style paint;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
+}
+
+body.layout-app #btnStartCanvas {
+  display: block;
+  width: 128px;
+  height: 32px;
+}
+
+body.layout-app .touch-start-hit {
+  position: fixed;
+  left: 50%;
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  z-index: 56;
+  width: 6.75rem;
+  min-width: 6.75rem;
+  height: 56px;
+  margin: 0;
+  padding: 0;
+  transform: translateX(-50%);
+  border: none;
+  background: transparent;
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+body.layout-app .touch-start-hit:active ~ .touch-start-lbl,
+body.layout-app .touch-start-hit:focus-visible {
+  outline: none;
 }
 
 body.layout-app .touch-zone {
@@ -656,53 +696,6 @@ body.layout-app #btnTouchSound {
 body.layout-app #btnTouchPosition {
   justify-self: end;
   text-align: right;
-}
-
-body.layout-app .touch-main-lbl {
-  position: relative;
-  z-index: 0;
-  margin: 0;
-  padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-  font-size: clamp(16px, 4.2vw, 20px);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1.15;
-  color: rgba(255, 255, 255, 0.92);
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: geometricPrecision;
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-}
-
-body.layout-app .touch-main-hit {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  appearance: none;
-  -webkit-appearance: none;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  color: transparent;
-  font-size: 0;
-  line-height: 0;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  overflow: hidden;
-}
-
-body.layout-app .touch-center:has(.touch-main-hit:active) .touch-main-lbl {
-  color: #22d3ee;
-  opacity: 0.88;
 }
 
 body.layout-app dialog.modal .form label {

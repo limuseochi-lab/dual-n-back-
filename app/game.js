@@ -159,7 +159,7 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const BUILD_VER = "v21";
+        const BUILD_VER = "v22";
         const AUDIO_VER = BUILD_VER;
         const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
@@ -172,27 +172,64 @@
         let letterBusy = false;
         let letterPlayChain = Promise.resolve();
         let sharedLetterAudio = null;
+        let iosLetterAudio = null;
         let activeGainNode = null;
         let letterEndTimer = null;
         let roundLock = false;
 
-        function softStopLetter(fadeSec = 0.07) {
-          const ctx = getAudioCtx();
+        function releaseBufferPlayback() {
           if (letterEndTimer) {
             clearTimeout(letterEndTimer);
             letterEndTimer = null;
           }
-          if (activeBufferSource && activeGainNode && ctx) {
-            const t = ctx.currentTime;
+          const src = activeBufferSource;
+          const g = activeGainNode;
+          activeBufferSource = null;
+          activeGainNode = null;
+          if (src) {
             try {
-              const g = activeGainNode.gain;
-              g.cancelScheduledValues(t);
-              g.setValueAtTime(Math.max(0.0001, g.value), t);
-              g.linearRampToValueAtTime(0.0001, t + fadeSec);
+              src.onended = null;
             } catch (_) {}
-          } else {
-            letterBusy = false;
+            try {
+              src.stop(0);
+            } catch (_) {}
+            try {
+              src.disconnect();
+            } catch (_) {}
           }
+          if (g) {
+            try {
+              g.disconnect();
+            } catch (_) {}
+          }
+        }
+
+        function haltLetterPlayback() {
+          letterPlaySeq++;
+          releaseBufferPlayback();
+          if (iosLetterAudio) {
+            try {
+              iosLetterAudio.pause();
+              iosLetterAudio.currentTime = 0;
+              iosLetterAudio.removeAttribute("src");
+            } catch (_) {}
+          }
+          if (sharedLetterAudio) {
+            try {
+              sharedLetterAudio.pause();
+              sharedLetterAudio.currentTime = 0;
+            } catch (_) {}
+          }
+          activeClip = null;
+          letterBusy = false;
+        }
+
+        async function waitLetterDone(maxMs = 4000) {
+          const t0 = nowMs();
+          while (letterBusy && nowMs() - t0 < maxMs) {
+            await sleep(30);
+          }
+          await sleep(20);
         }
 
         function cancelSpeechIfSpeaking() {
@@ -203,8 +240,7 @@
         }
 
         function stopLetterAudio() {
-          letterPlaySeq++;
-          softStopLetter();
+          haltLetterPlayback();
           cancelSpeechIfSpeaking();
           for (const osc of activeOscillators) {
             try {
@@ -212,18 +248,6 @@
             } catch (_) {}
           }
           activeOscillators = [];
-          if (activeClip) {
-            try {
-              activeClip.pause();
-            } catch (_) {}
-            activeClip = null;
-          }
-          if (sharedLetterAudio) {
-            try {
-              sharedLetterAudio.pause();
-              sharedLetterAudio.currentTime = 0;
-            } catch (_) {}
-          }
         }
 
         async function playLetterSpeech(symbol, seq) {
@@ -258,12 +282,51 @@
           });
         }
 
+        function iosPlaybackRate() {
+          return clamp(state.letterRate, 1, 1.25);
+        }
+
         async function playLetterMobile(symbol, seq) {
-          const bufPlay = playLetterBuffer(symbol, seq);
-          if (!bufPlay) return false;
-          const ok = await bufPlay;
-          if (ok) await sleep(30);
-          return ok;
+          const url = `./audio/${symbol}.wav?${AUDIO_VER}`;
+          if (!iosLetterAudio) {
+            iosLetterAudio = document.createElement("audio");
+            iosLetterAudio.setAttribute("playsinline", "");
+            iosLetterAudio.preload = "auto";
+          }
+          const a = iosLetterAudio;
+          letterBusy = true;
+          return new Promise((resolve) => {
+            let settled = false;
+            const finish = (ok) => {
+              if (settled) return;
+              settled = true;
+              a.removeEventListener("ended", onEnd);
+              a.removeEventListener("error", onErr);
+              if (seq === letterPlaySeq) {
+                letterBusy = false;
+                activeClip = null;
+              }
+              resolve(ok && seq === letterPlaySeq);
+            };
+            const onEnd = () => finish(true);
+            const onErr = () => finish(false);
+            try {
+              a.pause();
+              a.currentTime = 0;
+              a.src = url;
+              a.volume = Math.min(1, Math.max(0.35, state.vol));
+              a.playbackRate = iosPlaybackRate();
+              activeClip = a;
+              a.addEventListener("ended", onEnd);
+              a.addEventListener("error", onErr);
+              const p = a.play();
+              if (p && typeof p.then === "function") {
+                p.catch(() => finish(false));
+              }
+            } catch (_) {
+              finish(false);
+            }
+          });
         }
 
         async function loadLetterBuffers() {
@@ -295,6 +358,7 @@
           const ctx = getAudioCtx();
           const buf = letterBuffers[symbol];
           if (!ctx || !buf) return null;
+          releaseBufferPlayback();
           try {
             const t0 = ctx.currentTime;
             const peak = Math.min(1, Math.max(0.45, state.vol));
@@ -340,13 +404,6 @@
           }
         }
 
-        async function waitLetterIdle(maxMs = 720) {
-          const t0 = nowMs();
-          while (letterBusy && nowMs() - t0 < maxMs) {
-            await sleep(20);
-          }
-        }
-
         async function playLetterClip(symbol) {
           const prev = letterPlayChain;
           let release = () => {};
@@ -362,21 +419,15 @@
         }
 
         async function playLetterClipInner(symbol) {
-          await waitLetterIdle(USE_ELEMENT_AUDIO ? 620 : 520);
-          if (letterBusy) {
-            await sleep(80);
-            if (letterBusy) softStopLetter(0.09);
-            await sleep(USE_ELEMENT_AUDIO ? 70 : 40);
-          }
+          await waitLetterDone(USE_ELEMENT_AUDIO ? 4000 : 1200);
           letterPlaySeq++;
           const seq = letterPlaySeq;
           await ensureAudioUnlocked();
-          if (!letterAudioReady) await loadLetterBuffers();
-          if (seq !== letterPlaySeq) return false;
-
           if (USE_ELEMENT_AUDIO) {
             return playLetterMobile(symbol, seq);
           }
+          if (!letterAudioReady) await loadLetterBuffers();
+          if (seq !== letterPlaySeq) return false;
 
           const bufPlay = playLetterBuffer(symbol, seq);
           if (bufPlay) {
@@ -435,6 +486,20 @@
         async function primeSpeechAudible() {
           await unlockAudioHard();
           await ensureAudioUnlocked();
+          if (USE_ELEMENT_AUDIO) {
+            if (!iosLetterAudio) {
+              iosLetterAudio = document.createElement("audio");
+              iosLetterAudio.setAttribute("playsinline", "");
+              iosLetterAudio.preload = "auto";
+            }
+            try {
+              const res = await fetch(`./audio/A.wav?${AUDIO_VER}`, { cache: "no-store", method: "HEAD" });
+              if (!res.ok) showToast("Audio files missing — upload app/audio to GitHub");
+            } catch (_) {
+              showToast("Audio files missing — upload app/audio to GitHub");
+            }
+            return;
+          }
           pickEnglishVoice();
           const ok = await loadLetterBuffers();
           if (!ok) showToast("Audio files missing — upload app/audio to GitHub");
@@ -527,7 +592,7 @@
           audioMode: "speech",
           vol: 0.4,
           targetRate: 0.25,
-          letterRate: 1.12,
+          letterRate: 1,
           caption: "off",
           // generated per round
           seqPos: [],
@@ -562,7 +627,7 @@
             state.audioMode = typeof s.audioMode === "string" ? s.audioMode : "speech";
             state.vol = clamp(Number(s.vol) ?? 0.4, 0, 1);
             state.targetRate = clamp(Number(s.targetRate) || 0.25, 0.1, 0.5);
-            state.letterRate = clamp(Number(s.letterRate) || 1.12, 0.85, 1.35);
+            state.letterRate = clamp(Number(s.letterRate) || 1, 1, 1.25);
             state.caption = s.caption === "on" ? "on" : "off";
           } catch (_) {}
         }
@@ -603,7 +668,7 @@
           state.isiMs = clamp(parseInt(els.inpIsiMs.value, 10) || 1500, 300, 2500);
           state.isiMs = Math.max(state.isiMs, state.stimMs);
           if (els.inpLetterRate) {
-            state.letterRate = clamp(parseFloat(els.inpLetterRate.value) || 1.12, 0.85, 1.35);
+            state.letterRate = clamp(parseFloat(els.inpLetterRate.value) || 1, 1, 1.25);
           }
           state.audioMode = els.selAudioMode.value;
           state.vol = clamp(parseFloat(els.rngVol.value) || 0, 0, 1);
@@ -689,14 +754,34 @@
           });
         }
 
+        function drawStartLabelCanvas(text) {
+          const c = $("btnStartCanvas");
+          if (!c) return;
+          const w = 128;
+          const h = 32;
+          const dpr = Math.min(window.devicePixelRatio || 1, 2);
+          c.width = Math.round(w * dpr);
+          c.height = Math.round(h * dpr);
+          c.style.width = `${w}px`;
+          c.style.height = `${h}px`;
+          const ctx = c.getContext("2d");
+          if (!ctx) return;
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.clearRect(0, 0, w, h);
+          ctx.fillStyle = "rgba(255,255,255,0.92)";
+          ctx.font = '600 18px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(text, w / 2, h / 2);
+        }
+
         function updateTouchMainButton() {
           if (!options.touchControls || !els.btnStart) return;
           document.getElementById("btnTouchPause")?.remove();
           document.getElementById("btnStartText")?.remove();
           const text = state.running ? "STOP" : "START";
-          const lbl = $("btnStartLbl");
-          if (lbl) lbl.textContent = text;
-          els.btnStart.setAttribute("aria-label", text);
+          drawStartLabelCanvas(text);
+          els.btnStart.title = text;
         }
 
         function setRunningUI(running) {
