@@ -512,6 +512,26 @@
         color: var(--muted);
       }
 
+      .status-panel.stats-hidden {
+        display: none;
+      }
+
+      .pill.pill-btn {
+        cursor: pointer;
+        font: inherit;
+        color: inherit;
+      }
+
+      .pill.pill-btn:hover {
+        border-color: rgba(255, 255, 255, 0.22);
+        color: var(--text);
+      }
+
+      .pill.pill-btn[aria-pressed="true"] {
+        border-color: rgba(34, 211, 238, 0.35);
+        color: #22d3ee;
+      }
+
       .dot-ind {
         width: 10px;
         height: 10px;
@@ -582,149 +602,4 @@ body.layout-app .topbar {
 body.layout-app .btns {
   width: 100%;
   justify-content: flex-end;
-}
-
-body.layout-app .wrap {
-  padding-bottom: calc(120px + env(safe-area-inset-bottom));
-}
-
-body.layout-app .status-compact {
-  padding-bottom: 8px;
-}
-
-body.layout-app .status-compact.stats-hidden {
-  display: none;
-}
-
-body.layout-app .touch-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 50;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: end;
-  gap: 8px;
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-  pointer-events: none;
-}
-
-body.layout-app .touch-center {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 6.75rem;
-  min-width: 6.75rem;
-  max-width: 6.75rem;
-  overflow: hidden;
-  pointer-events: auto;
-}
-
-body.layout-app .touch-zone {
-  pointer-events: auto;
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.72);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: clamp(14px, 3.8vw, 18px);
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  padding: 16px 8px;
-  min-height: 56px;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-}
-
-body.layout-app .touch-zone:active {
-  color: #22d3ee;
-  transform: scale(0.98);
-}
-
-body.layout-app #btnTouchSound {
-  justify-self: start;
-  text-align: left;
-}
-
-body.layout-app #btnTouchPosition {
-  justify-self: end;
-  text-align: right;
-}
-
-body.layout-app .touch-main-btn {
-  justify-self: center;
-  width: 100%;
-  margin: 0;
-  padding: 16px 4px;
-  min-height: 56px;
-  appearance: none;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-  font-size: clamp(16px, 4.2vw, 20px);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.92);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-body.layout-app .touch-main-btn:active {
-  color: #22d3ee;
-}
-
-body.layout-app .build-tag {
-  position: fixed;
-  top: calc(6px + env(safe-area-inset-top));
-  right: 10px;
-  z-index: 120;
-  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #22d3ee;
-  letter-spacing: 0.06em;
-  pointer-events: none;
-}
-
-body.layout-app .touch-stats {
-  font-size: clamp(12px, 3.2vw, 15px);
-  letter-spacing: 0.14em;
-  color: rgba(255, 255, 255, 0.55);
-  padding-inline: 10px;
-}
-
-body.layout-app .touch-stats[aria-pressed="true"] {
-  color: #22d3ee;
-}
-
-body.layout-app .topbar .btns #btnStats[aria-pressed="true"] {
-  border-color: rgba(34, 211, 238, 0.35);
-  color: #22d3ee;
-}
-
-body.layout-app .stepper {
-  display: grid;
-  grid-template-columns: 44px 1fr 44px;
-  gap: 8px;
-  align-items: center;
-}
-
-body.layout-app .stepper input[type="number"] {
-  text-align: center;
-  padding: 10px 8px;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-body.layout-app .step-btn {
-  min-height: 44px;
-  padding: 0;
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1;
-  border-radius: 12px;
-  box-shadow: none;
 }

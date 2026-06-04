@@ -3,16 +3,11 @@
         const els = {
           grid: $("grid"),
           btnStart: $("btnStart"),
-          buildTag: $("buildTag"),
           btnReset: $("btnReset"),
           btnHelp: $("btnHelp"),
           btnSettings: $("btnSettings"),
-          btnStats: $("btnStats"),
           dlgSettings: $("dlgSettings"),
           btnCloseSettings: $("btnCloseSettings"),
-          btnTouchSound: $("btnTouchSound"),
-          btnTouchPosition: $("btnTouchPosition"),
-          statsBar: $("statsBar"),
           stRound: $("stRound"),
           stN: $("stN"),
           stTrial: $("stTrial"),
@@ -28,6 +23,8 @@
           flashRight: $("flashRight"),
           dlgHelp: $("dlgHelp"),
           btnCloseHelp: $("btnCloseHelp"),
+          btnInfo: $("btnInfo"),
+          statsBar: $("statsBar"),
           form: $("form"),
           inpN: $("inpN"),
           inpTrials: $("inpTrials"),
@@ -40,9 +37,6 @@
         };
 
         const LS_KEY = "dual-n-back:v1";
-        const isIOS =
-          /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
         const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
         const nowMs = () => performance.now();
@@ -86,7 +80,7 @@
 
         function clearLog() {
           els.log.innerHTML =
-            '<div class="muted">Ready. Check settings and tap <strong>START</strong>.</div>';
+            '<div class="muted">Ready. Check settings and press <strong>Start</strong>.</div>';
         }
 
         function randInt(n) {
@@ -99,9 +93,15 @@
         );
         const FREQS = SYMBOLS.map((_, i) => 220 * Math.pow(2, i / 12));
 
-        let audioCtx = null;
-        let audioUnlocked = false;
+        const SUBTITLE_DEFAULT = "Visual (position) + auditory (A–Z) memory training";
+        const LETTER_NAMES = {
+          A: "ay", B: "bee", C: "see", D: "dee", E: "ee", F: "eff", G: "jee", H: "aych",
+          I: "eye", J: "jay", K: "kay", L: "ell", M: "em", N: "en", O: "oh", P: "pee",
+          Q: "cue", R: "are", S: "ess", T: "tee", U: "you", V: "vee", W: "double you",
+          X: "ex", Y: "why", Z: "zee",
+        };
 
+        let audioCtx = null;
         function getAudioCtx() {
           if (audioCtx) return audioCtx;
           const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -114,8 +114,12 @@
           const ctx = getAudioCtx();
           if (!ctx) return;
           try {
+            const buffer = ctx.createBuffer(1, 1, 22050);
+            const source = ctx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(ctx.destination);
+            source.start(0);
             if (ctx.state === "suspended") await ctx.resume();
-            audioUnlocked = true;
           } catch (_) {}
         }
 
@@ -125,15 +129,11 @@
           if (ctx.state === "suspended") {
             try {
               await ctx.resume();
-              audioUnlocked = true;
             } catch (_) {}
-          } else {
-            audioUnlocked = true;
           }
         }
 
         let preferredEnVoice = null;
-        let voicesReady = false;
 
         function pickEnglishVoice() {
           if (!window.speechSynthesis) return null;
@@ -146,304 +146,7 @@
             list.find((v) => v.lang.startsWith("en")) ||
             null;
           preferredEnVoice = prefer(ranked) || prefer(voices);
-          voicesReady = !!preferredEnVoice || voices.length > 0;
           return preferredEnVoice;
-        }
-
-        const SUBTITLE_DEFAULT = "Visual (position) + auditory (A–Z) memory training";
-        const LETTER_NAMES = {
-          A: "ay", B: "bee", C: "see", D: "dee", E: "ee", F: "eff", G: "jee", H: "aych",
-          I: "eye", J: "jay", K: "kay", L: "ell", M: "em", N: "en", O: "oh", P: "pee",
-          Q: "cue", R: "are", S: "ess", T: "tee", U: "you", V: "vee", W: "double you",
-          X: "ex", Y: "why", Z: "zee",
-        };
-
-        const BUILD_VER = "v18";
-        const AUDIO_VER = BUILD_VER;
-        const USE_ELEMENT_AUDIO = options.mobile || isIOS;
-        const letterBlobUrls = Object.create(null);
-        const letterBuffers = Object.create(null);
-        let letterAudioReady = false;
-        let activeClip = null;
-        let activeBufferSource = null;
-        let activeOscillators = [];
-        let letterPlaySeq = 0;
-        let letterBusy = false;
-        let letterPlayChain = Promise.resolve();
-        let sharedLetterAudio = null;
-        let activeGainNode = null;
-        let letterEndTimer = null;
-        let roundLock = false;
-
-        function fadeStopLetter() {
-          const ctx = getAudioCtx();
-          if (letterEndTimer) {
-            clearTimeout(letterEndTimer);
-            letterEndTimer = null;
-          }
-          if (activeBufferSource && activeGainNode && ctx) {
-            const t = ctx.currentTime;
-            try {
-              activeGainNode.gain.cancelScheduledValues(t);
-              activeGainNode.gain.setValueAtTime(activeGainNode.gain.value, t);
-              activeGainNode.gain.linearRampToValueAtTime(0.001, t + 0.03);
-              activeBufferSource.stop(t + 0.035);
-            } catch (_) {}
-          }
-          activeBufferSource = null;
-          activeGainNode = null;
-          letterBusy = false;
-        }
-
-        function stopLetterAudio() {
-          letterPlaySeq++;
-          fadeStopLetter();
-          for (const osc of activeOscillators) {
-            try {
-              osc.stop();
-            } catch (_) {}
-          }
-          activeOscillators = [];
-          if (!USE_ELEMENT_AUDIO) {
-            if (activeClip) {
-              try {
-                activeClip.pause();
-              } catch (_) {}
-              activeClip = null;
-            }
-            if (sharedLetterAudio) {
-              try {
-                sharedLetterAudio.pause();
-              } catch (_) {}
-            }
-            if (window.speechSynthesis) {
-              try {
-                window.speechSynthesis.cancel();
-              } catch (_) {}
-            }
-          }
-        }
-
-        async function playLetterMobile(symbol, seq) {
-          const bufPlay = playLetterBuffer(symbol, seq);
-          if (!bufPlay) return false;
-          const ok = await bufPlay;
-          if (ok) await sleep(100);
-          return ok;
-        }
-
-        async function loadLetterBuffers() {
-          if (letterAudioReady) return true;
-          await ensureAudioUnlocked();
-          const ctx = getAudioCtx();
-          let loaded = 0;
-          await Promise.all(
-            SYMBOLS.map(async (sym) => {
-              const url = `./audio/${sym}.wav?${AUDIO_VER}`;
-              try {
-                const res = await fetch(url, { cache: "no-store" });
-                if (!res.ok) return;
-                const blob = await res.blob();
-                if (!USE_ELEMENT_AUDIO) letterBlobUrls[sym] = URL.createObjectURL(blob);
-                if (ctx) {
-                  const ab = await blob.arrayBuffer();
-                  letterBuffers[sym] = await ctx.decodeAudioData(ab.slice(0));
-                }
-                loaded++;
-              } catch (_) {}
-            })
-          );
-          letterAudioReady = loaded >= 20;
-          return letterAudioReady;
-        }
-
-        function playLetterBuffer(symbol, seq) {
-          const ctx = getAudioCtx();
-          const buf = letterBuffers[symbol];
-          if (!ctx || !buf) return null;
-          try {
-            const t0 = ctx.currentTime;
-            const peak = Math.min(1, Math.max(0.45, state.vol));
-            const dur = buf.duration;
-            const src = ctx.createBufferSource();
-            const g = ctx.createGain();
-            src.buffer = buf;
-            g.gain.setValueAtTime(0.001, t0);
-            g.gain.linearRampToValueAtTime(peak, t0 + 0.02);
-            g.gain.setValueAtTime(peak, Math.max(t0 + 0.03, t0 + dur - 0.05));
-            g.gain.linearRampToValueAtTime(0.001, t0 + dur);
-            src.connect(g);
-            g.connect(ctx.destination);
-            activeBufferSource = src;
-            activeGainNode = g;
-            letterBusy = true;
-            return new Promise((resolve) => {
-              let settled = false;
-              const done = () => {
-                if (settled) return;
-                settled = true;
-                if (letterEndTimer) {
-                  clearTimeout(letterEndTimer);
-                  letterEndTimer = null;
-                }
-                if (activeBufferSource === src) {
-                  activeBufferSource = null;
-                  activeGainNode = null;
-                }
-                if (seq === letterPlaySeq) letterBusy = false;
-                resolve(seq === letterPlaySeq);
-              };
-              src.onended = done;
-              src.start(t0);
-              letterEndTimer = window.setTimeout(done, Math.ceil(dur * 1000) + 150);
-            });
-          } catch (_) {
-            letterBusy = false;
-            return null;
-          }
-        }
-
-        async function waitLetterIdle(maxMs = 720) {
-          const t0 = nowMs();
-          while (letterBusy && nowMs() - t0 < maxMs) {
-            await sleep(20);
-          }
-        }
-
-        async function playLetterClip(symbol) {
-          const prev = letterPlayChain;
-          let release = () => {};
-          letterPlayChain = new Promise((r) => {
-            release = r;
-          });
-          await prev;
-          try {
-            return await playLetterClipInner(symbol);
-          } finally {
-            release();
-          }
-        }
-
-        async function playLetterClipInner(symbol) {
-          await waitLetterIdle(USE_ELEMENT_AUDIO ? 1000 : 520);
-          fadeStopLetter();
-          letterPlaySeq++;
-          const seq = letterPlaySeq;
-          await ensureAudioUnlocked();
-          if (!letterAudioReady) await loadLetterBuffers();
-          if (seq !== letterPlaySeq) return false;
-
-          if (USE_ELEMENT_AUDIO) {
-            return playLetterMobile(symbol, seq);
-          }
-
-          const bufPlay = playLetterBuffer(symbol, seq);
-          if (bufPlay) {
-            const ok = await bufPlay;
-            return ok && seq === letterPlaySeq;
-          }
-
-          const url = letterBlobUrls[symbol] || `./audio/${symbol}.wav?${AUDIO_VER}`;
-          if (!sharedLetterAudio) {
-            sharedLetterAudio = new Audio();
-            sharedLetterAudio.playsInline = true;
-            sharedLetterAudio.preload = "auto";
-          }
-          try {
-            sharedLetterAudio.pause();
-            sharedLetterAudio.currentTime = 0;
-            sharedLetterAudio.src = url;
-            sharedLetterAudio.volume = Math.max(0.35, state.vol);
-            activeClip = sharedLetterAudio;
-            letterBusy = true;
-            await sharedLetterAudio.play();
-            if (seq !== letterPlaySeq) return false;
-            await new Promise((resolve) => {
-              let settled = false;
-              const done = () => {
-                if (settled) return;
-                settled = true;
-                sharedLetterAudio.removeEventListener("ended", done);
-                sharedLetterAudio.removeEventListener("error", done);
-                if (seq === letterPlaySeq) letterBusy = false;
-                resolve();
-              };
-              sharedLetterAudio.addEventListener("ended", done);
-              sharedLetterAudio.addEventListener("error", done);
-              const durMs = Math.max(
-                380,
-                Math.ceil((sharedLetterAudio.duration || 0.48) * 1000) + 120
-              );
-              window.setTimeout(done, durMs);
-            });
-            if (seq !== letterPlaySeq) return false;
-            return true;
-          } catch (_) {
-            if (activeClip === sharedLetterAudio) activeClip = null;
-            if (seq === letterPlaySeq) letterBusy = false;
-          }
-          return false;
-        }
-
-        function primeSpeech() {
-          pickEnglishVoice();
-          loadLetterBuffers();
-        }
-
-        async function primeSpeechAudible() {
-          await unlockAudioHard();
-          await ensureAudioUnlocked();
-          if (!USE_ELEMENT_AUDIO) pickEnglishVoice();
-          const ok = await loadLetterBuffers();
-          if (!ok) showToast("Audio files missing — upload app/audio to GitHub");
-        }
-
-        function speakSymbol(symbol) {
-          if (!("speechSynthesis" in window)) return;
-          if (USE_ELEMENT_AUDIO) return;
-          const u = new SpeechSynthesisUtterance(LETTER_NAMES[symbol] || symbol);
-          u.rate = 0.95;
-          u.pitch = 1.0;
-          u.volume = 1;
-          u.lang = "en-US";
-          const voice = pickEnglishVoice();
-          if (voice) u.voice = voice;
-          try {
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(u);
-          } catch (_) {}
-        }
-
-        async function playStimulusAudio(aud, symbol) {
-          const dur = Math.min(420, Math.max(220, state.stimMs));
-          const vol = Math.max(0.2, state.vol);
-
-          if (state.audioMode === "off") return;
-
-          if (state.audioMode === "tone") {
-            playTone(aud, vol, dur);
-            return;
-          }
-
-          if (USE_ELEMENT_AUDIO) {
-            if (state.audioMode === "tone") {
-              playTone(aud, vol, dur);
-              return;
-            }
-            await playLetterClip(symbol);
-            return;
-          }
-
-          if (state.audioMode === "speech") {
-            stopLetterAudio();
-            speakSymbol(symbol);
-            return;
-          }
-          if (state.audioMode === "tone+speech") {
-            stopLetterAudio();
-            await playLetterClip(symbol);
-            return;
-          }
         }
 
         function playTone(idx, vol, durationMs) {
@@ -454,29 +157,101 @@
           const g = ctx.createGain();
           osc.type = "sine";
           osc.frequency.value = FREQS[idx % FREQS.length];
-          const peak = Math.max(0.08, vol);
-          g.gain.setValueAtTime(0.001, t0);
-          g.gain.linearRampToValueAtTime(peak, t0 + 0.02);
-          g.gain.linearRampToValueAtTime(0.001, t0 + durationMs / 1000);
+          g.gain.setValueAtTime(0.0001, t0);
+          g.gain.exponentialRampToValueAtTime(Math.max(0.0001, vol), t0 + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, t0 + durationMs / 1000);
           osc.connect(g);
           g.connect(ctx.destination);
           osc.start(t0);
-          const stopAt = t0 + durationMs / 1000 + 0.03;
-          osc.stop(stopAt);
-          activeOscillators.push(osc);
-          osc.onended = () => {
-            activeOscillators = activeOscillators.filter((o) => o !== osc);
-          };
+          osc.stop(t0 + durationMs / 1000 + 0.02);
         }
 
-        function playFeedback(_ok) {
-          /* No correct/wrong beeps — visual flash + toast only */
+        function playFeedback(ok) {
+          const ctx = getAudioCtx();
+          if (!ctx) return;
+          const t0 = ctx.currentTime;
+          const volume = Math.max(0.04, state.vol * 0.5);
+
+          const make = (freq, start, dur, type = "sine") => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, start);
+            g.gain.setValueAtTime(0.0001, start);
+            g.gain.exponentialRampToValueAtTime(volume, start + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+            osc.connect(g);
+            g.connect(ctx.destination);
+            osc.start(start);
+            osc.stop(start + dur + 0.015);
+          };
+
+          if (ok) {
+            // 띵동
+            make(880, t0, 0.09, "sine");
+            make(1174.66, t0 + 0.11, 0.13, "sine");
+          } else {
+            // 에엥
+            make(320, t0, 0.11, "sawtooth");
+            make(240, t0 + 0.09, 0.16, "sawtooth");
+          }
+        }
+
+        function speakSymbol(symbol) {
+          if (!("speechSynthesis" in window)) return false;
+          const u = new SpeechSynthesisUtterance(LETTER_NAMES[symbol] || symbol);
+          u.rate = 0.95;
+          u.pitch = 1.0;
+          u.volume = 1;
+          u.lang = "en-US";
+          const voice = pickEnglishVoice();
+          if (voice) u.voice = voice;
+          try {
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(u);
+            return true;
+          } catch (_) {
+            return false;
+          }
+        }
+
+        async function primeSpeechAudible() {
+          await unlockAudioHard();
+          await ensureAudioUnlocked();
+          pickEnglishVoice();
+          const idx = 0;
+          playTone(idx, Math.max(0.35, state.vol), 180);
+          speakSymbol("A");
+        }
+
+        async function playStimulusAudio(aud, symbol) {
+          await ensureAudioUnlocked();
+          const dur = Math.min(420, Math.max(220, state.stimMs));
+          const vol = Math.max(0.2, state.vol);
+
+          if (state.audioMode === "off") return;
+
+          if (state.audioMode === "tone") {
+            playTone(aud, vol, dur);
+            return;
+          }
+
+          if (state.audioMode === "speech") {
+            if (!speakSymbol(symbol)) playTone(aud, vol, dur);
+            return;
+          }
+
+          if (state.audioMode === "tone+speech") {
+            playTone(aud, vol * 0.55, dur);
+            window.setTimeout(() => {
+              if (!speakSymbol(symbol)) playTone(aud, vol, dur);
+            }, 60);
+          }
         }
 
         // --- Game state ---
         const state = {
           running: false,
-          paused: false,
           round: 1,
           n: 2,
           trials: 30,
@@ -579,14 +354,13 @@
 
         function resetRuntime() {
           state.running = false;
-          state.paused = false;
           state.trialIdx = -1;
           state.pressedV = false;
           state.pressedA = false;
           state.seqPos = [];
           state.seqAud = [];
-          setFormDisabled(false);
-          updateTouchMainButton();
+          els.btnStart.textContent = "Start";
+          els.btnStart.disabled = false;
           els.btnReset.disabled = false;
           els.indRun.classList.remove("live");
           els.ansV.textContent = "-";
@@ -608,7 +382,7 @@
             const cell = document.createElement("div");
             cell.className = "cell";
             cell.setAttribute("role", "gridcell");
-            cell.setAttribute("aria-label", `Cell ${i + 1}`);
+            cell.setAttribute("aria-label", `칸 ${i + 1}`);
             cell.dataset.idx = String(i);
             const dot = document.createElement("div");
             dot.className = "dot";
@@ -629,21 +403,9 @@
         }
 
         function setFormDisabled(disabled) {
-          if (!els.form) return;
-          const lock = disabled && state.running;
-          els.form.querySelectorAll("input, select, .step-btn").forEach((el) => {
-            el.disabled = lock;
+          els.form.querySelectorAll("input, select").forEach((el) => {
+            el.disabled = disabled;
           });
-        }
-
-        function updateTouchMainButton() {
-          if (!options.touchControls || !els.btnStart) return;
-          document.getElementById("btnTouchPause")?.remove();
-          document.getElementById("btnStartText")?.remove();
-          const showStop = state.running && !state.paused;
-          const text = showStop ? "STOP" : "START";
-          els.btnStart.textContent = text;
-          els.btnStart.setAttribute("aria-label", text);
         }
 
         function setRunningUI(running) {
@@ -651,34 +413,22 @@
           setFormDisabled(running);
           if (running) {
             els.indRun.classList.add("live");
-            if (!options.touchControls) els.btnStart.textContent = "Pause";
+            els.btnStart.disabled = true;
+            els.btnReset.disabled = true;
           } else {
             els.indRun.classList.remove("live");
-            state.paused = false;
-            if (!options.touchControls) els.btnStart.textContent = "START";
+            els.btnStart.textContent = "Start";
+            els.btnStart.disabled = false;
+            els.btnReset.disabled = false;
           }
-          els.btnReset.disabled = false;
-          updateTouchMainButton();
-        }
-
-        function setPausedUI(paused) {
-          state.paused = paused;
-          if (!state.running) {
-            updateTouchMainButton();
-            return;
-          }
-          if (paused) stopLetterAudio();
-          if (!options.touchControls) els.btnStart.textContent = paused ? "Resume" : "Pause";
-          els.indRun.classList.toggle("live", !paused);
-          updateTouchMainButton();
         }
 
         function toggleStatsPanel() {
-          if (!els.statsBar || !els.btnStats) return;
+          if (!els.statsBar || !els.btnInfo) return;
           const hidden = els.statsBar.classList.toggle("stats-hidden");
           const show = !hidden;
-          els.btnStats.setAttribute("aria-pressed", show ? "true" : "false");
-          els.btnStats.textContent = show ? "HIDE" : "INFO";
+          els.btnInfo.setAttribute("aria-pressed", show ? "true" : "false");
+          els.btnInfo.textContent = show ? "HIDE" : "INFO";
         }
 
         function genSequenceWithTargets({ length, symbolsCount, n, targetRate }) {
@@ -756,13 +506,13 @@
         }
 
         function setAnswerChips(vAns, aAns) {
-          els.ansV.textContent = vAns ? "Match" : "None";
-          els.ansA.textContent = aAns ? "Match" : "None";
+          els.ansV.textContent = vAns ? "match" : "none";
+          els.ansA.textContent = aAns ? "match" : "none";
         }
 
         function markHitUI(which, ok) {
           const el = which === "V" ? els.hitV : els.hitA;
-          el.textContent = ok ? "Correct" : "Wrong";
+          el.textContent = ok ? "hit" : "miss";
           el.style.color = ok ? "var(--good)" : "var(--bad)";
           window.setTimeout(() => {
             el.style.color = "";
@@ -821,13 +571,13 @@
               : acc(state.hitsA, state.missA, state.faA, state.correctRejA);
 
           logLine(
-            `<div class="muted">— Round complete —</div>
-             <div>Score: <strong>${state.score}</strong></div>
-             <div>Visual: <span class="good">hits ${state.hitsV}</span>, <span class="bad">wrong ${state.faV}</span>, miss ${state.missV}, reject ${state.correctRejV}, acc ${fmtPct(vAcc)}</div>
-             <div>Audio: ${
+            `<div class="muted">— 라운드 종료 —</div>
+             <div>점수: <strong>${state.score}</strong></div>
+             <div>시각: <span class="good">히트 ${state.hitsV}</span>, <span class="bad">오답 ${state.faV}</span>, 놓침 ${state.missV}, 정거절 ${state.correctRejV}, 정확도 ${fmtPct(vAcc)}</div>
+             <div>청각: ${
                state.audioMode === "off"
-                 ? '<span class="muted">off</span>'
-                 : `<span class="good">hits ${state.hitsA}</span>, <span class="bad">wrong ${state.faA}</span>, miss ${state.missA}, reject ${state.correctRejA}, acc ${fmtPct(aAcc)}`
+                 ? '<span class="muted">꺼짐</span>'
+                 : `<span class="good">히트 ${state.hitsA}</span>, <span class="bad">오답 ${state.faA}</span>, 놓침 ${state.missA}, 정거절 ${state.correctRejA}, 정확도 ${fmtPct(aAcc)}`
              }</div>`
           );
         }
@@ -869,10 +619,7 @@
         }
 
         function handlePress(which) {
-          if (options.mobile || options.touchControls) {
-            unlockAudioHard();
-          }
-          if (!state.running || state.paused) return;
+          if (!state.running) return;
           if (state.trialIdx < 0 || state.trialIdx >= state.trials) return;
           const i = state.trialIdx;
           const n = state.n;
@@ -902,26 +649,15 @@
         // Main loop uses a run token to cancel safely
         let runToken = 0;
         async function runRound() {
-          if (roundLock || state.running) return;
-          roundLock = true;
           runToken++;
           const token = runToken;
-          try {
+
           syncStateFromForm();
-          if (USE_ELEMENT_AUDIO && state.audioMode !== "off") {
-            state.audioMode = "speech";
-            if (els.selAudioMode) els.selAudioMode.value = "speech";
-          }
           resetRoundStats();
           clearLog();
-          logLine(`<div class="muted">Round ${state.round} · N=${state.n} · ${state.trials} trials</div>`);
+          logLine(`<div class="muted">라운드 ${state.round} 시작 · N=${state.n} · ${state.trials} trials</div>`);
 
-          state.trialIdx = 0;
-          renderHeader();
-
-          await unlockAudioHard();
           await ensureAudioUnlocked();
-          await primeSpeechAudible();
 
           const len = state.trials;
           state.seqPos = genSequenceWithTargets({
@@ -937,20 +673,16 @@
             targetRate: state.targetRate,
           });
 
+          state.trialIdx = 0;
+          setRunningUI(true);
+          renderHeader();
+
           // countdown
           showToast("Starting…");
           await sleep(250);
 
-          setRunningUI(true);
-          setPausedUI(false);
-
           while (state.trialIdx < state.trials) {
-            if (token !== runToken) break;
-
-            if (state.paused) {
-              await sleep(80);
-              continue;
-            }
+            if (token !== runToken) return;
 
             const i = state.trialIdx;
             renderHeader();
@@ -959,8 +691,7 @@
             // keep stimulus visible for stimMs
             const tStart = nowMs();
             while (nowMs() - tStart < state.stimMs) {
-              if (token !== runToken) break;
-              if (state.paused) break;
+              if (token !== runToken) return;
               await sleep(16);
             }
 
@@ -970,64 +701,41 @@
             const remaining = Math.max(0, state.isiMs - state.stimMs);
             const tIsi = nowMs();
             while (nowMs() - tIsi < remaining) {
-              if (token !== runToken) break;
-              if (state.paused) break;
+              if (token !== runToken) return;
               await sleep(16);
             }
 
-            // finalize only after stimMs + blank ISI (full response window)
-            if (!state.paused) {
-              finalizeTrialJudgement(i);
-              updateScoreUI();
+            finalizeTrialJudgement(i);
+            updateScoreUI();
 
-              const vAns = isMatch(state.seqPos, i, state.n);
-              const aAns = state.audioMode === "off" ? false : isMatch(state.seqAud, i, state.n);
-              const vTag = vAns ? "V✓" : "V·";
-              const aTag = state.audioMode === "off" ? "A-" : aAns ? "A✓" : "A·";
-              const vIn = state.pressedV ? "V!" : "V ";
-              const aIn = state.audioMode === "off" ? "A-" : state.pressedA ? "A!" : "A ";
-              logLine(
-                `<span class="muted">#${i + 1}</span> <span>${vTag}/${aTag}</span> <span class="muted">in ${vIn}/${aIn}</span>`
-              );
+            const vAns = isMatch(state.seqPos, i, state.n);
+            const aAns = state.audioMode === "off" ? false : isMatch(state.seqAud, i, state.n);
+            const vTag = vAns ? "V✓" : "V·";
+            const aTag = state.audioMode === "off" ? "A-" : aAns ? "A✓" : "A·";
+            const vIn = state.pressedV ? "V!" : "V ";
+            const aIn = state.audioMode === "off" ? "A-" : state.pressedA ? "A!" : "A ";
+            logLine(
+              `<span class="muted">#${i + 1}</span> <span>${vTag}/${aTag}</span> <span class="muted">in ${vIn}/${aIn}</span>`
+            );
 
-              state.trialIdx++;
-            }
+            state.trialIdx++;
           }
 
-          if (token === runToken) {
-            stopLetterAudio();
-            setRunningUI(false);
-            setPausedUI(false);
-            renderHeader();
-            renderRoundSummary();
-            showToast("Round complete");
-            els.btnReset.disabled = false;
-          }
-          } finally {
-            roundLock = false;
-            if (state.running) {
-              setRunningUI(false);
-              setPausedUI(false);
-            }
-            setFormDisabled(false);
-          }
+          if (token !== runToken) return;
+          setRunningUI(false);
+          renderHeader();
+          renderRoundSummary();
+          showToast("Round complete");
         }
 
-        function toggleStartPause() {
-          if (!state.running) {
-            if (roundLock) return;
-            primeSpeechAudible();
-            runRound();
-            return;
-          }
-          setPausedUI(!state.paused);
-          showToast(state.paused ? "Paused" : "Resumed");
+        async function startGame() {
+          if (state.running) return;
+          await primeSpeechAudible();
+          runRound();
         }
 
         function hardReset() {
           runToken++;
-          roundLock = false;
-          stopLetterAudio();
           state.round = 1;
           resetRoundStats();
           resetRuntime();
@@ -1044,33 +752,29 @@
         }
 
         // UI events
-        els.btnStart.addEventListener("click", toggleStartPause);
-        els.btnStart.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            toggleStartPause();
-          }
-        });
+        els.btnStart.addEventListener("click", startGame);
         els.btnReset.addEventListener("click", hardReset);
+        if (els.btnInfo) {
+          els.btnInfo.addEventListener("click", () => toggleStatsPanel());
+        }
         els.btnHelp.addEventListener("click", () => {
           try {
             els.dlgHelp.showModal();
           } catch (_) {
-            alert("L: visual match, A: audio match, Space: pause/resume. Match when same as N trials ago!");
+            alert("L: visual match, A: audio match. Press when same as N trials ago.");
           }
         });
         els.btnCloseHelp.addEventListener("click", () => els.dlgHelp.close());
 
         if (els.btnSettings && els.dlgSettings) {
           els.btnSettings.addEventListener("click", () => {
-            setFormDisabled(false);
             if (state.running) {
-              showToast("Stop the game first to change settings");
+              showToast("게임 중에는 설정을 바꿀 수 없어요");
             }
             try {
               els.dlgSettings.showModal();
             } catch (_) {
-              alert("Could not open settings. Please update your browser.");
+              alert("설정 창을 열 수 없어요. 브라우저를 업데이트해 주세요.");
             }
           });
           els.btnCloseSettings.addEventListener("click", () => els.dlgSettings.close());
@@ -1080,51 +784,6 @@
           if (state.running) return;
           syncStateFromForm();
         });
-
-        els.form.addEventListener("click", (e) => {
-          const btn = e.target.closest(".step-btn");
-          if (!btn) return;
-          e.preventDefault();
-          if (state.running) {
-            showToast("Stop the game first to change settings");
-            return;
-          }
-          const input = $(btn.dataset.step);
-          if (!input) return;
-          const delta = parseInt(btn.dataset.delta, 10) || 0;
-          const min = parseFloat(input.min);
-          const max = parseFloat(input.max);
-          let val = parseInt(input.value, 10) || 0;
-          val = clamp(val + delta, min, max);
-          input.value = String(val);
-          syncStateFromForm();
-        });
-
-        if (options.touchControls) {
-          document.addEventListener(
-            "touchstart",
-            () => {
-              unlockAudioHard();
-            },
-            { passive: true }
-          );
-          els.btnTouchSound.addEventListener("click", () => {
-            unlockAudioHard();
-            handlePress("A");
-          });
-          els.btnTouchPosition.addEventListener("click", () => {
-            unlockAudioHard();
-            handlePress("V");
-          });
-          if (els.btnStats) {
-            els.btnStats.addEventListener("click", () => toggleStatsPanel());
-          }
-        }
-
-        if (window.speechSynthesis) {
-          window.speechSynthesis.addEventListener("voiceschanged", pickEnglishVoice);
-          pickEnglishVoice();
-        }
 
         // Keyboard
         window.addEventListener("keydown", (e) => {
@@ -1140,9 +799,9 @@
             handlePress("V");
             return;
           }
-          if (key === " " || key === "spacebar") {
+          if (key === "i") {
             e.preventDefault();
-            toggleStartPause();
+            toggleStatsPanel();
             return;
           }
           if (key === "r") {
@@ -1155,9 +814,22 @@
               return;
             }
             e.preventDefault();
-            toggleStartPause();
+            startGame();
           }
         });
+
+        document.addEventListener(
+          "pointerdown",
+          () => {
+            unlockAudioHard();
+          },
+          { once: false, passive: true }
+        );
+
+        if (window.speechSynthesis) {
+          window.speechSynthesis.addEventListener("voiceschanged", pickEnglishVoice);
+          pickEnglishVoice();
+        }
 
         // Double click log to start next round
         els.log.addEventListener("dblclick", () => {
@@ -1173,8 +845,8 @@
         clearLog();
         resetRuntime();
         renderHeader();
-        updateTouchMainButton();
-        setFormDisabled(false);
 
-        if (els.buildTag) els.buildTag.textContent = BUILD_VER;
+        if (options.registerSw && "serviceWorker" in navigator) {
+          navigator.serviceWorker.register(options.swPath || "./sw.js").catch(() => {});
+        }
 };
