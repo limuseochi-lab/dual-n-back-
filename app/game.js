@@ -195,7 +195,7 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const BUILD_VER = "v31";
+        const BUILD_VER = "v32";
         const AUDIO_VER = BUILD_VER;
         const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
@@ -637,7 +637,7 @@
           n: 2,
           trials: 30,
           stimMs: 500,
-          isiMs: 1500,
+          isiMs: 1450,
           audioMode: "speech",
           vol: 0.4,
           targetRate: 0.25,
@@ -672,7 +672,7 @@
             state.n = clamp(Number(s.n) || 2, 1, 6);
             state.trials = clamp(Number(s.trials) || 30, 10, 120);
             state.stimMs = clamp(Number(s.stimMs) || 500, 200, 1500);
-            state.isiMs = clamp(Number(s.isiMs) || 1500, 400, 2500);
+            state.isiMs = clamp(Number(s.isiMs) || 1450, 400, 2500);
             state.audioMode = typeof s.audioMode === "string" ? s.audioMode : "speech";
             state.vol = clamp(Number(s.vol) ?? 0.4, 0, 1);
             state.targetRate = clamp(Number(s.targetRate) || 0.25, 0.1, 0.5);
@@ -714,7 +714,7 @@
           state.n = clamp(parseInt(els.inpN.value, 10) || 2, 1, 6);
           state.trials = clamp(parseInt(els.inpTrials.value, 10) || 30, 10, 120);
           state.stimMs = clamp(parseInt(els.inpStimMs.value, 10) || 500, 200, 1500);
-          state.isiMs = clamp(parseInt(els.inpIsiMs.value, 10) || 1500, 400, 2500);
+          state.isiMs = clamp(parseInt(els.inpIsiMs.value, 10) || 1450, 400, 2500);
           state.isiMs = Math.max(state.isiMs, state.stimMs);
           if (els.inpLetterRate) {
             state.letterRate = clamp(parseFloat(els.inpLetterRate.value) || 1, 1, 1.5);
@@ -856,8 +856,7 @@
         async function briefVisualLead() {
           await waitPaintFrames(2);
           if (!USE_ELEMENT_AUDIO) return;
-          const lead = Math.min(50, Math.max(15, Math.floor(state.stimMs * 0.08)));
-          if (lead > 0) await sleep(lead);
+          await sleep(90);
         }
 
         function updatePcStartButton() {
@@ -1104,15 +1103,14 @@
           }, Math.max(600, state.isiMs * 0.6));
         }
 
-        async function presentStimulus(trialIndex, token) {
+        async function presentStimulus(trialIndex) {
           const pos = state.seqPos[trialIndex];
           const aud = state.seqAud[trialIndex];
-          const t0 = nowMs();
-          state.trialOpenedAt = t0;
 
           haltLetterPool();
           clearGridActive();
           highlightPosition(pos);
+          state.trialOpenedAt = nowMs();
           resetPerTrialInputs();
 
           const n = state.n;
@@ -1124,19 +1122,8 @@
 
           if (state.audioMode !== "off") {
             const symbol = SYMBOLS[aud];
-            playStimulusAudio(aud, symbol);
+            await playStimulusAudio(aud, symbol);
             renderCaption(symbol);
-          }
-
-          while (nowMs() - t0 < state.stimMs) {
-            if (token !== runToken || state.paused) break;
-            await sleep(16);
-          }
-          clearGridActive();
-
-          while (nowMs() - t0 < state.isiMs) {
-            if (token !== runToken || state.paused) break;
-            await sleep(16);
           }
         }
 
@@ -1222,9 +1209,25 @@
 
             const i = state.trialIdx;
             renderHeader();
-            await presentStimulus(i, token);
+            await presentStimulus(i);
 
-            // finalize after full trial window (stimMs + ISI counted from trial start)
+            const tStim = nowMs();
+            while (nowMs() - tStim < state.stimMs) {
+              if (token !== runToken) break;
+              if (state.paused) break;
+              await sleep(16);
+            }
+
+            clearGridActive();
+
+            const remaining = Math.max(0, state.isiMs - state.stimMs);
+            const tIsi = nowMs();
+            while (nowMs() - tIsi < remaining) {
+              if (token !== runToken) break;
+              if (state.paused) break;
+              await sleep(16);
+            }
+
             if (!state.paused) {
               finalizeTrialJudgement(i);
               updateScoreUI();
@@ -1444,6 +1447,11 @@
           nextRound();
           showToast(`Round ${state.round} ready`);
         });
+
+        if (options.touchControls && !document.body.classList.contains("layout-app")) {
+          const tag = $("buildTag");
+          if (tag) tag.textContent = "WRONG index.html";
+        }
 
         // Initialization
         buildGrid();

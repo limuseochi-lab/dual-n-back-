@@ -2,12 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark light" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#050508" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="N-Back" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/icon-180.png" />
+    <link rel="icon" href="./icons/icon-180.png" type="image/png" />
     <title>Dual N-Back</title>
-    <link rel="stylesheet" href="game.css?v=31" />
+    <link rel="stylesheet" href="./game.css?v=32" />
   </head>
-  <body class="layout-pc">
+  <body class="layout-app">
+    <div id="buildTag" class="build-tag">…</div>
     <div class="wrap">
       <div class="app" role="application" aria-label="Dual N-Back game">
         <section class="panel" aria-label="Game board">
@@ -22,14 +31,14 @@
             <div class="btns">
               <button class="ghost" id="btnHelp" type="button">Help</button>
               <button id="btnReset" type="button">Reset</button>
-              <button class="primary" id="btnStart" type="button">START</button>
+              <button id="btnSettings" type="button">Settings</button>
+              <button class="primary" id="btnStats" type="button" aria-pressed="false">INFO</button>
             </div>
           </div>
 
           <div class="grid" id="grid" aria-label="3x3 position grid"></div>
 
-          <div class="status">
-            <div class="status-panel" id="statsBar">
+          <div class="status status-compact stats-hidden" id="statsBar">
             <div class="status-row">
               <div class="stat">
                 <p class="k">Round</p>
@@ -48,114 +57,119 @@
                 <p class="v" id="stScore">0</p>
               </div>
             </div>
-            <p class="hint" id="roundHint">
-              <kbd>L</kbd> position, <kbd>A</kbd> sound, <kbd>Space</kbd> start/stop.
-              <span class="muted">(No matches for the first N trials)</span>
-            </p>
-            </div>
-            <div class="chips" aria-label="Input status">
-              <span class="pill"><span class="dot-ind" id="indRun"></span> Running</span>
-              <span class="pill"><strong id="stVM">Visual</strong> <span class="muted" id="stVKey">[L]</span></span>
-              <span class="pill"><strong id="stAM">Audio</strong> <span class="muted" id="stAKey">[A]</span></span>
-              <button type="button" class="pill pill-btn" id="btnInfo" aria-pressed="false">INFO</button>
-            </div>
           </div>
         </section>
-
-        <aside class="right pc-only" aria-label="Settings and log">
-          <section class="card">
-            <h2>Settings</h2>
-            <div class="body">
-              <form class="form" id="form">
-                <div class="row">
-                  <label>
-                    N (difficulty)
-                    <input id="inpN" type="number" min="1" max="6" step="1" value="2" />
-                  </label>
-                  <label>
-                    Trials
-                    <input id="inpTrials" type="number" min="10" max="120" step="1" value="30" />
-                  </label>
-                </div>
-                <div class="row">
-                  <label>
-                    Stimulus (ms)
-                    <input id="inpStimMs" type="number" min="200" max="1500" step="50" value="500" />
-                  </label>
-                  <label>
-                    ISI (ms, full trial)
-                    <input id="inpIsiMs" type="number" min="400" max="2500" step="50" value="1500" />
-                  </label>
-                </div>
-                <div class="row">
-                  <label>
-                    Audio mode
-                    <select id="selAudioMode">
-                      <option value="speech">Speech (letters)</option>
-                      <option value="tone">Tone</option>
-                      <option value="tone+speech">Tone + speech</option>
-                      <option value="off">Off (visual only)</option>
-                    </select>
-                  </label>
-                  <label>
-                    Volume
-                    <input id="rngVol" type="range" min="0" max="1" step="0.01" value="0.4" />
-                  </label>
-                </div>
-                <div class="row">
-                  <label>
-                    Letter speed
-                    <input id="inpLetterRate" type="number" min="1" max="1.5" step="0.05" value="1" />
-                  </label>
-                  <label>
-                    Match rate (approx.)
-                    <input id="rngTargetRate" type="range" min="0.1" max="0.5" step="0.05" value="0.25" />
-                  </label>
-                </div>
-                <div class="row">
-                  <label>
-                    Caption (current letter)
-                    <select id="selCaption">
-                      <option value="off">Hidden</option>
-                      <option value="on">Show</option>
-                    </select>
-                  </label>
-                </div>
-                <p class="hint">
-                  - Audio uses random letters A–Z.<br />
-                  - Press only when the current stimulus matches exactly <strong>N trials ago</strong>.
-                </p>
-              </form>
-            </div>
-          </section>
-
-          <section class="card">
-            <h2>Live feedback</h2>
-            <div class="body">
-              <div class="chips">
-                <span class="chip"><strong>Position</strong> target: <span id="ansV">—</span></span>
-                <span class="chip"><strong>Sound</strong> target: <span id="ansA">—</span></span>
-                <span class="chip"><strong>Your input</strong> position: <span id="hitV">—</span> / sound:
-                  <span id="hitA">—</span></span>
-              </div>
-              <p class="hint">
-                Targets are shown after each trial ends. Press <kbd>L</kbd> / <kbd>A</kbd> for instant hit/FA
-                color on the grid; final score is counted when the trial window closes.
-              </p>
-            </div>
-          </section>
-
-          <section class="card">
-            <h2>Log</h2>
-            <div class="log" id="log" aria-live="polite"></div>
-          </section>
-        </aside>
       </div>
+    </div>
+
+    <div class="touch-bar app-only" aria-label="Touch controls">
+      <button type="button" class="touch-zone" id="btnTouchSound" aria-label="Sound match">SOUND</button>
+      <button type="button" class="touch-center-btn" id="btnStart">START</button>
+      <button type="button" class="touch-zone" id="btnTouchPosition" aria-label="Position match">POSITION</button>
+    </div>
+
+    <div class="hidden-ui" aria-hidden="true">
+      <span id="indRun"></span>
+      <span id="ansV">-</span>
+      <span id="ansA">-</span>
+      <span id="hitV">-</span>
+      <span id="hitA">-</span>
+      <div id="log"></div>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <div class="half-flash left" id="flashLeft" aria-hidden="true"></div>
     <div class="half-flash right" id="flashRight" aria-hidden="true"></div>
+
+    <dialog id="dlgSettings" class="modal">
+      <div class="modal-head">
+        <div>
+          <h2>Settings</h2>
+          <p>Tap STOP before changing settings (or pause on desktop).</p>
+        </div>
+        <button id="btnCloseSettings" type="button">Close</button>
+      </div>
+      <div class="modal-body">
+        <form class="form" id="form">
+          <div class="row">
+            <label>
+              N (difficulty)
+              <div class="stepper">
+                <button type="button" class="step-btn" data-step="inpN" data-delta="-1" aria-label="Decrease N">−</button>
+                <input id="inpN" type="number" min="1" max="6" step="1" value="2" inputmode="numeric" />
+                <button type="button" class="step-btn" data-step="inpN" data-delta="1" aria-label="Increase N">+</button>
+              </div>
+            </label>
+            <label>
+              Trials
+              <div class="stepper">
+                <button type="button" class="step-btn" data-step="inpTrials" data-delta="-5" aria-label="Decrease trials">−</button>
+                <input id="inpTrials" type="number" min="10" max="120" step="1" value="30" inputmode="numeric" />
+                <button type="button" class="step-btn" data-step="inpTrials" data-delta="5" aria-label="Increase trials">+</button>
+              </div>
+            </label>
+          </div>
+          <div class="row">
+            <label>
+              Stimulus (ms)
+              <div class="stepper">
+                <button type="button" class="step-btn" data-step="inpStimMs" data-delta="-50" aria-label="Decrease stimulus">−</button>
+                <input id="inpStimMs" type="number" min="200" max="1500" step="50" value="500" inputmode="numeric" />
+                <button type="button" class="step-btn" data-step="inpStimMs" data-delta="50" aria-label="Increase stimulus">+</button>
+              </div>
+            </label>
+            <label>
+              ISI (ms, full trial)
+              <div class="stepper">
+                <button type="button" class="step-btn" data-step="inpIsiMs" data-delta="-50" aria-label="Decrease ISI">−</button>
+                <input id="inpIsiMs" type="number" min="400" max="2500" step="50" value="1450" inputmode="numeric" />
+                <button type="button" class="step-btn" data-step="inpIsiMs" data-delta="50" aria-label="Increase ISI">+</button>
+              </div>
+            </label>
+          </div>
+          <div class="row">
+            <label>
+              Letter speed
+              <div class="stepper">
+                <button type="button" class="step-btn" data-step="inpLetterRate" data-delta="-0.05" aria-label="Slower letters">−</button>
+                <input id="inpLetterRate" type="number" min="1" max="1.5" step="0.05" value="1" inputmode="decimal" />
+                <button type="button" class="step-btn" data-step="inpLetterRate" data-delta="0.05" aria-label="Faster letters">+</button>
+              </div>
+            </label>
+            <label>
+              Audio mode
+              <select id="selAudioMode">
+                <option value="speech">Speech (letters)</option>
+                <option value="tone">Tone</option>
+                <option value="tone+speech">Tone + speech</option>
+                <option value="off">Off (visual only)</option>
+              </select>
+            </label>
+            <label>
+              Volume
+              <input id="rngVol" type="range" min="0" max="1" step="0.01" value="0.6" />
+            </label>
+          </div>
+          <div class="row">
+            <label>
+              Match rate (approx.)
+              <input id="rngTargetRate" type="range" min="0.1" max="0.5" step="0.05" value="0.25" />
+            </label>
+            <label>
+              Caption (show current letter)
+              <select id="selCaption">
+                <option value="off">Hidden</option>
+                <option value="on">Show</option>
+              </select>
+            </label>
+          </div>
+          <p class="hint">
+            - Tap <strong>STOP</strong> before changing settings, then <strong>START</strong> again.<br />
+            - Press only when the current stimulus matches exactly <strong>N trials ago</strong>.
+          </p>
+        </form>
+      </div>
+    </dialog>
 
     <dialog id="dlgHelp" class="modal">
       <div class="modal-head">
@@ -167,24 +181,58 @@
       </div>
       <div class="modal-body" style="line-height: 1.6">
         <ul style="margin: 10px 0 0; padding-left: 18px">
-          <li><strong>Position</strong>: press <strong>L</strong> when the current cell matches <strong>N trials ago</strong></li>
-          <li><strong>Sound</strong>: press <strong>A</strong> when the current letter matches <strong>N trials ago</strong></li>
-          <li><strong>Space</strong>: start or stop the round (same as the START button)</li>
+          <li><strong>POSITION</strong>: tap when the current position matches <strong>N trials ago</strong></li>
+          <li><strong>SOUND</strong>: tap when the current sound matches <strong>N trials ago</strong></li>
+          <li><strong>START / STOP</strong> (center): start or end the round — sides are SOUND / POSITION</li>
           <li><strong>INFO</strong>: show or hide round, N, trial, and score</li>
-          <li>Visual and audio matches are independent each trial.</li>
+          <li>The first <strong>N</strong> trials have no matches.</li>
         </ul>
         <div style="margin-top: 12px; padding: 12px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.05)">
           <div style="font-weight: 750">Scoring</div>
           <div style="font-size: 13px; color: rgba(255,255,255,0.78); margin-top: 6px">
-            Correct hit +2, false alarm −1, miss −1.
+            Correct +2, wrong −1, miss −1
           </div>
         </div>
       </div>
     </dialog>
 
-    <script src="game.js?v=31"></script>
     <script>
-      initDualNBack({ registerSw: false, touchControls: false, mobile: false });
+      (function () {
+        var VER = "32";
+        var tag = document.getElementById("buildTag");
+        function showVer() {
+          if (tag) tag.textContent = "v" + VER;
+        }
+        showVer();
+        var legacy = document.getElementById("btnTouchPause");
+        if (legacy) legacy.remove();
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            regs.forEach(function (r) {
+              r.unregister();
+            });
+          });
+        }
+        if ("caches" in window) {
+          caches.keys().then(function (keys) {
+            keys.forEach(function (k) {
+              caches.delete(k);
+            });
+          });
+        }
+        var s = document.createElement("script");
+        s.src = "./game.js?v=" + VER + "&t=" + Date.now();
+        s.onerror = function () {
+          if (tag) tag.textContent = "v" + VER + " (load error)";
+        };
+        s.onload = function () {
+          if (window.__DNB_INIT__) return;
+          window.__DNB_INIT__ = true;
+          initDualNBack({ registerSw: false, touchControls: true, mobile: true });
+          showVer();
+        };
+        document.body.appendChild(s);
+      })();
     </script>
   </body>
 </html>
