@@ -10,7 +10,7 @@
           btnReset: $("btnReset"),
           btnHelp: $("btnHelp"),
           btnSettings: $("btnSettings"),
-          btnStats: $("btnStats"),
+          btnStats: $("btnStats") || $("btnInfo"),
           dlgSettings: $("dlgSettings"),
           btnCloseSettings: $("btnCloseSettings"),
           btnTouchSound: $("btnTouchSound"),
@@ -83,16 +83,16 @@
           }, 240);
         }
 
-        const pendingTouchPress = new Set();
-        let touchPressRaf = 0;
+        const pendingPress = new Set();
+        let pressRaf = 0;
 
-        function queueTouchPress(which) {
-          pendingTouchPress.add(which);
-          if (touchPressRaf) return;
-          touchPressRaf = requestAnimationFrame(() => {
-            touchPressRaf = 0;
-            const batch = [...pendingTouchPress];
-            pendingTouchPress.clear();
+        function queuePress(which) {
+          pendingPress.add(which);
+          if (pressRaf) return;
+          pressRaf = requestAnimationFrame(() => {
+            pressRaf = 0;
+            const batch = [...pendingPress];
+            pendingPress.clear();
             if (options.mobile || options.touchControls) unlockAudioHard();
             for (const w of batch) handlePress(w);
           });
@@ -102,13 +102,13 @@
           if (!btn) return;
           const onPointer = (e) => {
             if (e.pointerType === "mouse" && e.button !== 0) return;
-            queueTouchPress(which);
+            queuePress(which);
           };
           btn.addEventListener("pointerdown", onPointer, { passive: true });
           btn.addEventListener(
             "touchstart",
             () => {
-              queueTouchPress(which);
+              queuePress(which);
             },
             { passive: true }
           );
@@ -195,7 +195,7 @@
           X: "ex", Y: "why", Z: "zee",
         };
 
-        const BUILD_VER = "v28";
+        const BUILD_VER = "v31";
         const AUDIO_VER = BUILD_VER;
         const USE_ELEMENT_AUDIO = options.mobile || isIOS;
         const letterBlobUrls = Object.create(null);
@@ -309,18 +309,24 @@
           return letterPoolReady;
         }
 
+        function mobileLetterRate() {
+          return clamp(state.letterRate, 1, 1.5);
+        }
+
         async function playMobileLetter(symbol) {
           const a = letterPool[symbol];
           if (!a) return false;
           haltLetterPool();
           letterBusy = true;
+          const rate = mobileLetterRate();
           a.volume = Math.min(1, Math.max(0.35, state.vol));
-          a.playbackRate = 1;
+          a.playbackRate = rate;
           a.currentTime = 0;
           activeClip = a;
           try {
             await a.play();
-            const ms = Math.min(1200, Math.max(280, Math.ceil((a.duration || 0.42) * 1000) + 60));
+            const durSec = (a.duration || 0.42) / rate;
+            const ms = Math.min(900, Math.max(100, Math.ceil(durSec * 1000) + 25));
             await waitAudioElementEnded(a, ms);
             return true;
           } catch (_) {
@@ -665,12 +671,12 @@
             if (!s || typeof s !== "object") return;
             state.n = clamp(Number(s.n) || 2, 1, 6);
             state.trials = clamp(Number(s.trials) || 30, 10, 120);
-            state.stimMs = clamp(Number(s.stimMs) || 500, 300, 1500);
-            state.isiMs = clamp(Number(s.isiMs) || 1500, 300, 2500);
+            state.stimMs = clamp(Number(s.stimMs) || 500, 200, 1500);
+            state.isiMs = clamp(Number(s.isiMs) || 1500, 400, 2500);
             state.audioMode = typeof s.audioMode === "string" ? s.audioMode : "speech";
             state.vol = clamp(Number(s.vol) ?? 0.4, 0, 1);
             state.targetRate = clamp(Number(s.targetRate) || 0.25, 0.1, 0.5);
-            state.letterRate = clamp(Number(s.letterRate) || 1, 1, 1.25);
+            state.letterRate = clamp(Number(s.letterRate) || 1, 1, 1.5);
             state.caption = s.caption === "on" ? "on" : "off";
           } catch (_) {}
         }
@@ -707,11 +713,11 @@
         function syncStateFromForm() {
           state.n = clamp(parseInt(els.inpN.value, 10) || 2, 1, 6);
           state.trials = clamp(parseInt(els.inpTrials.value, 10) || 30, 10, 120);
-          state.stimMs = clamp(parseInt(els.inpStimMs.value, 10) || 500, 300, 1500);
-          state.isiMs = clamp(parseInt(els.inpIsiMs.value, 10) || 1500, 300, 2500);
+          state.stimMs = clamp(parseInt(els.inpStimMs.value, 10) || 500, 200, 1500);
+          state.isiMs = clamp(parseInt(els.inpIsiMs.value, 10) || 1500, 400, 2500);
           state.isiMs = Math.max(state.isiMs, state.stimMs);
           if (els.inpLetterRate) {
-            state.letterRate = clamp(parseFloat(els.inpLetterRate.value) || 1, 1, 1.25);
+            state.letterRate = clamp(parseFloat(els.inpLetterRate.value) || 1, 1, 1.5);
           }
           state.audioMode = els.selAudioMode.value;
           state.vol = clamp(parseFloat(els.rngVol.value) || 0, 0, 1);
@@ -720,6 +726,18 @@
           saveSettings();
           syncFormFromState();
           renderHeader();
+          flashSettingsApplied();
+        }
+
+        function flashSettingsApplied() {
+          if (!options.touchControls) return;
+          const sub = $("subtitle");
+          if (!sub) return;
+          sub.textContent = `Timing: ${state.stimMs}ms stim · ${state.isiMs}ms trial · ${state.letterRate.toFixed(2)}x letter`;
+          window.clearTimeout(flashSettingsApplied._t);
+          flashSettingsApplied._t = window.setTimeout(() => {
+            sub.textContent = SUBTITLE_DEFAULT;
+          }, 1400);
         }
 
         function resetRoundStats() {
@@ -746,10 +764,9 @@
           if (options.touchControls) updateTouchMainButton();
           els.btnReset.disabled = false;
           els.indRun.classList.remove("live");
-          els.ansV.textContent = "-";
-          els.ansA.textContent = "-";
-          els.hitV.textContent = "-";
-          els.hitA.textContent = "-";
+          hideTrialTargets();
+          els.hitV.textContent = "—";
+          els.hitA.textContent = "—";
           clearGridActive();
           renderHeader();
         }
@@ -780,8 +797,14 @@
         function renderHeader() {
           els.stRound.textContent = `${state.round}`;
           els.stN.textContent = `${state.n}`;
-          els.stTrial.textContent =
-            state.trialIdx < 0 ? `0 / ${state.trials}` : `${state.trialIdx + 1} / ${state.trials}`;
+          const total = state.trials;
+          if (state.trialIdx < 0) {
+            els.stTrial.textContent = `0 / ${total}`;
+          } else if (state.trialIdx >= total) {
+            els.stTrial.textContent = `${total} / ${total}`;
+          } else {
+            els.stTrial.textContent = `${state.trialIdx + 1} / ${total}`;
+          }
           els.stScore.textContent = `${state.score}`;
         }
 
@@ -830,9 +853,16 @@
           });
         }
 
-        async function syncVisualBeforeAudio() {
+        async function briefVisualLead() {
           await waitPaintFrames(2);
-          if (USE_ELEMENT_AUDIO) await sleep(150);
+          if (!USE_ELEMENT_AUDIO) return;
+          const lead = Math.min(50, Math.max(15, Math.floor(state.stimMs * 0.08)));
+          if (lead > 0) await sleep(lead);
+        }
+
+        function updatePcStartButton() {
+          if (options.touchControls || !els.btnStart) return;
+          els.btnStart.textContent = state.running ? "STOP" : "START";
         }
 
         function setRunningUI(running) {
@@ -840,14 +870,13 @@
           setFormDisabled(running);
           if (running) {
             els.indRun.classList.add("live");
-            if (!options.touchControls) els.btnStart.textContent = "Pause";
           } else {
             els.indRun.classList.remove("live");
             state.paused = false;
-            if (!options.touchControls) els.btnStart.textContent = "START";
           }
           els.btnReset.disabled = false;
           if (options.touchControls) updateTouchMainButton();
+          else updatePcStartButton();
         }
 
         function setPausedUI(paused) {
@@ -857,9 +886,9 @@
             return;
           }
           if (paused) stopLetterAudio();
-          if (!options.touchControls) els.btnStart.textContent = paused ? "Resume" : "Pause";
           els.indRun.classList.toggle("live", !paused);
           if (options.touchControls) updateTouchMainButton();
+          else updatePcStartButton();
         }
 
         function toggleStatsPanel() {
@@ -940,11 +969,47 @@
         function resetPerTrialInputs() {
           state.pressedV = false;
           state.pressedA = false;
-          els.hitV.textContent = "-";
-          els.hitA.textContent = "-";
+          els.hitV.textContent = "—";
+          els.hitA.textContent = "—";
+        }
+
+        function hideTrialTargets() {
+          if (!els.ansV) return;
+          els.ansV.textContent = "—";
+          els.ansA.textContent = state.audioMode === "off" ? "n/a" : "—";
+        }
+
+        function revealTrialTargets(trialIndex) {
+          if (!els.ansV) return;
+          const n = state.n;
+          const vAns = isMatch(state.seqPos, trialIndex, n);
+          const aAns = state.audioMode === "off" ? false : isMatch(state.seqAud, trialIndex, n);
+          els.ansV.textContent = vAns ? "Match" : "None";
+          els.ansA.textContent = state.audioMode === "off" ? "n/a" : aAns ? "Match" : "None";
+        }
+
+        function trialInputLabel(shouldMatch, pressed) {
+          if (shouldMatch && pressed) return "Hit";
+          if (shouldMatch && !pressed) return "Miss";
+          if (!shouldMatch && pressed) return "FA";
+          return "OK";
+        }
+
+        function setTrialInputSummary(trialIndex) {
+          if (!els.hitV) return;
+          const n = state.n;
+          const vAns = isMatch(state.seqPos, trialIndex, n);
+          const aAns = state.audioMode === "off" ? false : isMatch(state.seqAud, trialIndex, n);
+          els.hitV.textContent = trialInputLabel(vAns, state.pressedV);
+          els.hitA.textContent =
+            state.audioMode === "off" ? "n/a" : trialInputLabel(aAns, state.pressedA);
         }
 
         function setAnswerChips(vAns, aAns) {
+          if (!options.touchControls) {
+            hideTrialTargets();
+            return;
+          }
           els.ansV.textContent = vAns ? "Match" : "None";
           els.ansA.textContent = aAns ? "Match" : "None";
         }
@@ -1039,14 +1104,15 @@
           }, Math.max(600, state.isiMs * 0.6));
         }
 
-        async function presentStimulus(trialIndex) {
+        async function presentStimulus(trialIndex, token) {
           const pos = state.seqPos[trialIndex];
           const aud = state.seqAud[trialIndex];
+          const t0 = nowMs();
+          state.trialOpenedAt = t0;
 
           haltLetterPool();
           clearGridActive();
           highlightPosition(pos);
-          state.trialOpenedAt = nowMs();
           resetPerTrialInputs();
 
           const n = state.n;
@@ -1054,12 +1120,23 @@
           const aAns = state.audioMode === "off" ? false : isMatch(state.seqAud, trialIndex, n);
           setAnswerChips(vAns, aAns);
 
-          await syncVisualBeforeAudio();
+          await briefVisualLead();
 
           if (state.audioMode !== "off") {
             const symbol = SYMBOLS[aud];
-            await playStimulusAudio(aud, symbol);
+            playStimulusAudio(aud, symbol);
             renderCaption(symbol);
+          }
+
+          while (nowMs() - t0 < state.stimMs) {
+            if (token !== runToken || state.paused) break;
+            await sleep(16);
+          }
+          clearGridActive();
+
+          while (nowMs() - t0 < state.isiMs) {
+            if (token !== runToken || state.paused) break;
+            await sleep(16);
           }
         }
 
@@ -1145,31 +1222,16 @@
 
             const i = state.trialIdx;
             renderHeader();
-            await presentStimulus(i);
+            await presentStimulus(i, token);
 
-            // keep stimulus visible for stimMs
-            const tStart = nowMs();
-            while (nowMs() - tStart < state.stimMs) {
-              if (token !== runToken) break;
-              if (state.paused) break;
-              await sleep(16);
-            }
-
-            // stimulus off — blank ISI; input stays open until full trial interval ends
-            clearGridActive();
-
-            const remaining = Math.max(0, state.isiMs - state.stimMs);
-            const tIsi = nowMs();
-            while (nowMs() - tIsi < remaining) {
-              if (token !== runToken) break;
-              if (state.paused) break;
-              await sleep(16);
-            }
-
-            // finalize only after stimMs + blank ISI (full response window)
+            // finalize after full trial window (stimMs + ISI counted from trial start)
             if (!state.paused) {
               finalizeTrialJudgement(i);
               updateScoreUI();
+              if (!options.touchControls) {
+                revealTrialTargets(i);
+                setTrialInputSummary(i);
+              }
 
               const vAns = isMatch(state.seqPos, i, state.n);
               const aAns = state.audioMode === "off" ? false : isMatch(state.seqAud, i, state.n);
@@ -1222,13 +1284,8 @@
             runRound();
             return;
           }
-          if (options.touchControls) {
-            stopRound();
-            showToast("Stopped");
-            return;
-          }
-          setPausedUI(!state.paused);
-          showToast(state.paused ? "Paused" : "Resumed");
+          stopRound();
+          if (options.touchControls) showToast("Stopped");
         }
 
         function applyStepDelta(btn) {
@@ -1354,12 +1411,12 @@
           const key = e.key.toLowerCase();
           if (key === "a") {
             e.preventDefault();
-            handlePress("A");
+            queuePress("A");
             return;
           }
           if (key === "l") {
             e.preventDefault();
-            handlePress("V");
+            queuePress("V");
             return;
           }
           if (key === " " || key === "spacebar") {
@@ -1398,6 +1455,8 @@
         if (options.touchControls) {
           purgeLegacyStartControls();
           updateTouchMainButton();
+        } else {
+          updatePcStartButton();
         }
         setFormDisabled(false);
 
