@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <meta name="color-scheme" content="dark only" />
-    <meta name="theme-color" content="#050508" />
+    <meta name="theme-color" content="#000000" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="N-Back" />
@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="./icons/icon-180.png" />
     <link rel="icon" href="./icons/icon-180.png" type="image/png" />
     <title>Dual N-Back</title>
-    <link rel="stylesheet" href="./game.css?v=34" />
+    <link rel="stylesheet" href="./game.css?v=35" />
     <script>
       (function () {
         var ua = navigator.userAgent || "";
@@ -72,12 +72,6 @@
           </div>
         </section>
       </div>
-    </div>
-
-    <div id="installBar" class="install-bar app-only" hidden>
-      <span id="installText"></span>
-      <button type="button" id="btnInstall" class="primary" hidden>Install</button>
-      <button type="button" id="btnDismissInstall" class="install-dismiss ghost" aria-label="Dismiss">×</button>
     </div>
 
     <div class="touch-bar app-only" aria-label="Touch controls">
@@ -224,63 +218,12 @@
 
     <script>
       (function () {
-        var VER = "34";
+        var VER = "35";
         var tag = document.getElementById("buildTag");
         function showVer() {
           if (tag) tag.textContent = "v" + VER;
         }
         showVer();
-
-        (function setupInstallBar() {
-          var ua = navigator.userAgent || "";
-          var android = /Android/i.test(ua);
-          var samsung = /SamsungBrowser/i.test(ua);
-          var standalone =
-            window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
-          if (!android || standalone) return;
-
-          var bar = document.getElementById("installBar");
-          var text = document.getElementById("installText");
-          var btnInstall = document.getElementById("btnInstall");
-          var btnDismiss = document.getElementById("btnDismissInstall");
-          if (!bar || !text) return;
-          if (localStorage.getItem("dnb-install-dismiss") === "1") return;
-
-          var deferredPrompt = null;
-          if (samsung) {
-            text.textContent = "Add to Home: ≡ menu → Add page to → Home screen";
-          } else {
-            text.textContent = "Add to Home: ⋮ menu → Install app (or Add to Home screen)";
-          }
-          bar.hidden = false;
-
-          window.addEventListener("beforeinstallprompt", function (e) {
-            e.preventDefault();
-            deferredPrompt = e;
-            if (btnInstall) {
-              btnInstall.hidden = false;
-              text.textContent = "Install this app on your Home screen";
-            }
-          });
-
-          if (btnInstall) {
-            btnInstall.addEventListener("click", function () {
-              if (!deferredPrompt) return;
-              deferredPrompt.prompt();
-              deferredPrompt.userChoice.finally(function () {
-                deferredPrompt = null;
-                bar.hidden = true;
-              });
-            });
-          }
-
-          if (btnDismiss) {
-            btnDismiss.addEventListener("click", function () {
-              localStorage.setItem("dnb-install-dismiss", "1");
-              bar.hidden = true;
-            });
-          }
-        })();
         var legacy = document.getElementById("btnTouchPause");
         if (legacy) legacy.remove();
         if ("serviceWorker" in navigator) {

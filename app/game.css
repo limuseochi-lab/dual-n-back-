@@ -583,37 +583,53 @@ body.layout-app .btns {
   justify-content: flex-end;
 }
 
-/* Keep mobile dark even when the phone system theme is light */
+/* v32 mobile snapshot — identical solid colors on iPhone and Galaxy */
 body.layout-app {
   color-scheme: dark only;
+  --bg0: #000000;
+  --bg1: #000000;
+  --card: rgba(255, 255, 255, 0.04);
+  --card2: rgba(255, 255, 255, 0.05);
+  --stroke: rgba(255, 255, 255, 0.14);
+  --stroke2: rgba(255, 255, 255, 0.18);
+  background: #000000;
 }
 
-/*
- * iPhone (platform-ios): default v32 look — unchanged.
- * Galaxy/Chrome (platform-android): same design, lifted so it matches iPhone on screen.
- * Samsung crushes faint rgba overlays; Safari does not.
- */
-html.platform-android body.layout-app .cell {
-  background: color-mix(in srgb, #ffffff 7.5%, #0b1022 92.5%);
-  border-color: color-mix(in srgb, #ffffff 17%, #0b1022 83%);
+body.layout-app .wrap {
+  background: #000000;
 }
 
-html.platform-android body.layout-app .cell::before {
-  opacity: 0.58;
+body.layout-app .panel {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
 }
 
-html.platform-android body.layout-app .dot {
-  background: color-mix(in srgb, #ffffff 24%, #0b1022 76%);
-  border-color: color-mix(in srgb, #ffffff 20%, #0b1022 80%);
-  opacity: 0.48;
+body.layout-app .topbar {
+  background: transparent;
+  border-bottom: none;
 }
 
-html.platform-android body.layout-app .panel {
-  border-color: color-mix(in srgb, #ffffff 16%, #0b1022 84%);
+body.layout-app .grid {
+  gap: 10px;
+  padding: 18px;
 }
 
-html.platform-android body.layout-app .topbar {
-  border-bottom-color: color-mix(in srgb, #ffffff 16%, #0b1022 84%);
+body.layout-app .cell {
+  background: #151c2e;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+body.layout-app .cell::before {
+  opacity: 0.5;
+}
+
+body.layout-app .dot {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.18);
+  opacity: 0.4;
 }
 
 body.layout-app .status-compact {
@@ -768,42 +784,3 @@ body.layout-app .step-btn {
   box-shadow: none;
 }
 
-body.layout-app .install-bar {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: calc(78px + env(safe-area-inset-bottom));
-  z-index: 55;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid var(--stroke);
-  background: rgba(10, 12, 20, 0.96);
-  box-shadow: var(--shadow2);
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.35;
-}
-
-body.layout-app .install-bar[hidden] {
-  display: none !important;
-}
-
-body.layout-app .install-bar span {
-  flex: 1;
-  min-width: 0;
-}
-
-body.layout-app .install-bar button {
-  flex-shrink: 0;
-  padding: 8px 10px;
-  font-size: 12px;
-  box-shadow: none;
-}
-
-body.layout-app .install-bar .install-dismiss {
-  min-width: 36px;
-  padding-inline: 8px;
-}
