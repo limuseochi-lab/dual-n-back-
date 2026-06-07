@@ -1,32 +1,24 @@
 {
   "name": "Dual N-Back",
   "short_name": "N-Back",
-  "description": "Visual (position) + auditory (A–Z) dual n-back memory training",
-  "start_url": "./",
+  "description": "Visual (position) + auditory (A–Z) dual n-back training",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#050508",
+  "background_color": "#070912",
   "theme_color": "#050508",
-  "lang": "en",
   "icons": [
     {
       "src": "./icons/icon-180.png",
       "sizes": "180x180",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
       "src": "./icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "./icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ]
 }

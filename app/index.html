@@ -13,7 +13,19 @@
     <link rel="apple-touch-icon" href="./icons/icon-180.png" />
     <link rel="icon" href="./icons/icon-180.png" type="image/png" />
     <title>Dual N-Back</title>
-    <link rel="stylesheet" href="./game.css?v=33" />
+    <link rel="stylesheet" href="./game.css?v=34" />
+    <script>
+      (function () {
+        var ua = navigator.userAgent || "";
+        var ios =
+          /iPad|iPhone|iPod/i.test(ua) ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        var android = /Android/i.test(ua);
+        document.documentElement.classList.add(
+          ios ? "platform-ios" : android ? "platform-android" : "platform-other"
+        );
+      })();
+    </script>
   </head>
   <body class="layout-app">
     <div id="buildTag" class="build-tag">…</div>
@@ -60,6 +72,12 @@
           </div>
         </section>
       </div>
+    </div>
+
+    <div id="installBar" class="install-bar app-only" hidden>
+      <span id="installText"></span>
+      <button type="button" id="btnInstall" class="primary" hidden>Install</button>
+      <button type="button" id="btnDismissInstall" class="install-dismiss ghost" aria-label="Dismiss">×</button>
     </div>
 
     <div class="touch-bar app-only" aria-label="Touch controls">
@@ -188,6 +206,14 @@
           <li>The first <strong>N</strong> trials have no matches.</li>
         </ul>
         <div style="margin-top: 12px; padding: 12px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.05)">
+          <div style="font-weight: 750">Add to Home Screen</div>
+          <div style="font-size: 13px; color: rgba(255,255,255,0.78); margin-top: 6px; line-height: 1.5">
+            <strong>iPhone (Safari):</strong> Share → More → <strong>Add to Home Screen</strong><br />
+            <strong>Galaxy (Chrome):</strong> ⋮ menu → <strong>Install app</strong> or <strong>Add to Home screen</strong><br />
+            <strong>Galaxy (Samsung Internet):</strong> ≡ menu → <strong>Add page to</strong> → <strong>Home screen</strong>
+          </div>
+        </div>
+        <div style="margin-top: 12px; padding: 12px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.05)">
           <div style="font-weight: 750">Scoring</div>
           <div style="font-size: 13px; color: rgba(255,255,255,0.78); margin-top: 6px">
             Correct +2, wrong −1, miss −1
@@ -198,12 +224,63 @@
 
     <script>
       (function () {
-        var VER = "33";
+        var VER = "34";
         var tag = document.getElementById("buildTag");
         function showVer() {
           if (tag) tag.textContent = "v" + VER;
         }
         showVer();
+
+        (function setupInstallBar() {
+          var ua = navigator.userAgent || "";
+          var android = /Android/i.test(ua);
+          var samsung = /SamsungBrowser/i.test(ua);
+          var standalone =
+            window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+          if (!android || standalone) return;
+
+          var bar = document.getElementById("installBar");
+          var text = document.getElementById("installText");
+          var btnInstall = document.getElementById("btnInstall");
+          var btnDismiss = document.getElementById("btnDismissInstall");
+          if (!bar || !text) return;
+          if (localStorage.getItem("dnb-install-dismiss") === "1") return;
+
+          var deferredPrompt = null;
+          if (samsung) {
+            text.textContent = "Add to Home: ≡ menu → Add page to → Home screen";
+          } else {
+            text.textContent = "Add to Home: ⋮ menu → Install app (or Add to Home screen)";
+          }
+          bar.hidden = false;
+
+          window.addEventListener("beforeinstallprompt", function (e) {
+            e.preventDefault();
+            deferredPrompt = e;
+            if (btnInstall) {
+              btnInstall.hidden = false;
+              text.textContent = "Install this app on your Home screen";
+            }
+          });
+
+          if (btnInstall) {
+            btnInstall.addEventListener("click", function () {
+              if (!deferredPrompt) return;
+              deferredPrompt.prompt();
+              deferredPrompt.userChoice.finally(function () {
+                deferredPrompt = null;
+                bar.hidden = true;
+              });
+            });
+          }
+
+          if (btnDismiss) {
+            btnDismiss.addEventListener("click", function () {
+              localStorage.setItem("dnb-install-dismiss", "1");
+              bar.hidden = true;
+            });
+          }
+        })();
         var legacy = document.getElementById("btnTouchPause");
         if (legacy) legacy.remove();
         if ("serviceWorker" in navigator) {
