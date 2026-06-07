@@ -583,8 +583,45 @@ body.layout-app .btns {
   justify-content: flex-end;
 }
 
+/* v32 mobile look — flat black, no glass panel, subtle grid (iPhone + Galaxy identical) */
 body.layout-app {
   color-scheme: dark only;
+  background: #000000;
+}
+
+body.layout-app .wrap {
+  background: #000000;
+}
+
+body.layout-app .panel {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+}
+
+body.layout-app .topbar {
+  background: transparent;
+  border-bottom: none;
+}
+
+body.layout-app .topbar button {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+body.layout-app .topbar button.primary {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.28), rgba(34, 211, 238, 0.18));
+  border-color: rgba(34, 211, 238, 0.2);
+}
+
+body.layout-app .touch-zone,
+body.layout-app .touch-center-btn {
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 body.layout-app .status-compact {
