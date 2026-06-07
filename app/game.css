@@ -1,5 +1,4 @@
-﻿    <style>
-      :root {
+﻿      :root {
         --bg0: #070912;
         --bg1: #0b1022;
         --card: rgba(255, 255, 255, 0.06);
@@ -23,7 +22,7 @@
       }
 
       @media (prefers-color-scheme: light) {
-        :root {
+        body.layout-pc {
           --bg0: #f7f9ff;
           --bg1: #eef2ff;
           --card: rgba(10, 20, 40, 0.06);
@@ -532,7 +531,7 @@
         height: 0;
         pointer-events: none;
         opacity: 0;
-        z-index: 45;
+        z-index: 40;
         transition: opacity 130ms ease;
         border-radius: 16px;
       }
@@ -584,6 +583,56 @@ body.layout-app .btns {
   justify-content: flex-end;
 }
 
+/* Mobile always uses dark theme — system light mode was turning the app blinding white */
+body.layout-app {
+  color-scheme: dark only;
+  --bg0: #070912;
+  --bg1: #0b1022;
+  --card: rgba(255, 255, 255, 0.08);
+  --card2: rgba(255, 255, 255, 0.1);
+  --stroke: rgba(255, 255, 255, 0.24);
+  --stroke2: rgba(255, 255, 255, 0.3);
+  --text: rgba(255, 255, 255, 0.94);
+  --muted: rgba(255, 255, 255, 0.72);
+  --muted2: rgba(255, 255, 255, 0.58);
+}
+
+/* Higher contrast grid — Samsung AMOLED crushes faint rgba overlays */
+body.layout-app .panel {
+  background: #0c101c;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+body.layout-app .grid {
+  gap: 12px;
+  padding: 16px;
+  margin: 0 8px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+body.layout-app .cell {
+  background: #162038;
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 10px rgba(0, 0, 0, 0.32);
+}
+
+body.layout-app .cell::before {
+  opacity: 0.82;
+}
+
+body.layout-app .dot {
+  background: rgba(255, 255, 255, 0.4);
+  border-color: rgba(255, 255, 255, 0.34);
+  opacity: 0.72;
+}
+
+body.layout-app button {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
 body.layout-app .wrap {
   padding-bottom: calc(120px + env(safe-area-inset-bottom));
 }
@@ -617,6 +666,7 @@ body.layout-app .touch-bar {
   gap: 8px;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
   pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(5, 5, 8, 0.92) 35%);
 }
 
 body.layout-app .touch-center-btn {
@@ -626,7 +676,7 @@ body.layout-app .touch-center-btn {
   border: none;
   background: transparent;
   box-shadow: none;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.94);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   font-size: clamp(14px, 3.8vw, 17px);
   font-weight: 600;
@@ -648,7 +698,7 @@ body.layout-app .touch-zone {
   appearance: none;
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.88);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: clamp(14px, 3.8vw, 18px);
   font-weight: 600;
@@ -688,7 +738,6 @@ body.layout-app dialog.modal .form label .stepper,
 body.layout-app dialog.modal .form label .stepper * {
   pointer-events: auto;
 }
-
 
 body.layout-app .build-tag {
   position: fixed;
