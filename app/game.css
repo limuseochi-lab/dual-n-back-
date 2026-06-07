@@ -583,53 +583,8 @@ body.layout-app .btns {
   justify-content: flex-end;
 }
 
-/* v32 mobile snapshot — identical solid colors on iPhone and Galaxy */
 body.layout-app {
   color-scheme: dark only;
-  --bg0: #000000;
-  --bg1: #000000;
-  --card: rgba(255, 255, 255, 0.04);
-  --card2: rgba(255, 255, 255, 0.05);
-  --stroke: rgba(255, 255, 255, 0.14);
-  --stroke2: rgba(255, 255, 255, 0.18);
-  background: #000000;
-}
-
-body.layout-app .wrap {
-  background: #000000;
-}
-
-body.layout-app .panel {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  border-radius: 0;
-  overflow: visible;
-}
-
-body.layout-app .topbar {
-  background: transparent;
-  border-bottom: none;
-}
-
-body.layout-app .grid {
-  gap: 10px;
-  padding: 18px;
-}
-
-body.layout-app .cell {
-  background: #151c2e;
-  border-color: rgba(255, 255, 255, 0.14);
-}
-
-body.layout-app .cell::before {
-  opacity: 0.5;
-}
-
-body.layout-app .dot {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.18);
-  opacity: 0.4;
 }
 
 body.layout-app .status-compact {

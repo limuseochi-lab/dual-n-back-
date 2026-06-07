@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <meta name="color-scheme" content="dark only" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#050508" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="N-Back" />
@@ -13,19 +13,7 @@
     <link rel="apple-touch-icon" href="./icons/icon-180.png" />
     <link rel="icon" href="./icons/icon-180.png" type="image/png" />
     <title>Dual N-Back</title>
-    <link rel="stylesheet" href="./game.css?v=35" />
-    <script>
-      (function () {
-        var ua = navigator.userAgent || "";
-        var ios =
-          /iPad|iPhone|iPod/i.test(ua) ||
-          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-        var android = /Android/i.test(ua);
-        document.documentElement.classList.add(
-          ios ? "platform-ios" : android ? "platform-android" : "platform-other"
-        );
-      })();
-    </script>
+    <link rel="stylesheet" href="./game.css?v=36" />
   </head>
   <body class="layout-app">
     <div id="buildTag" class="build-tag">…</div>
@@ -218,7 +206,7 @@
 
     <script>
       (function () {
-        var VER = "35";
+        var VER = "36";
         var tag = document.getElementById("buildTag");
         function showVer() {
           if (tag) tag.textContent = "v" + VER;
